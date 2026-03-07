@@ -91,24 +91,24 @@ objectClaimToDelivery state =
   S.foldr derive state state
   where
     derive :: IndexedGen -> Norm -> Norm
-    derive (IndexedGen capIdx t g) acc =
+    derive (IndexedGen capIdx time g) acc =
       case g of
         GClaim (Claim act) ->
           case act of
-            Simple p obj t ->
+            Simple actor obj target ->
               case oSubtype obj of
                 ThingSubtype _ ->
-                  let deliveryAct = Simple p (deliveryObject obj) t
-                      newGen = IndexedGen capIdx t (GClaim (Claim deliveryAct))
+                  let deliveryAct = Simple actor (deliveryObject obj) target
+                      newGen = IndexedGen capIdx time (GClaim (Claim deliveryAct))
                   in if S.member newGen acc
                         then acc
                         else S.insert newGen acc
                 _ -> acc
-            Counter p obj t ->
+            Counter actor obj target ->
               case oSubtype obj of
                 ThingSubtype _ ->
-                  let deliveryAct = Counter p (deliveryObject obj) t
-                      newGen = IndexedGen capIdx t (GClaim (Claim deliveryAct))
+                  let deliveryAct = Counter actor (deliveryObject obj) target
+                      newGen = IndexedGen capIdx time (GClaim (Claim deliveryAct))
                   in if S.member newGen acc
                         then acc
                         else S.insert newGen acc
@@ -169,13 +169,13 @@ claimFulfilled state =
   S.foldr derive state state
   where
     derive :: IndexedGen -> Norm -> Norm
-    derive (IndexedGen capIdx t g) acc =
+    derive (IndexedGen capIdx time g) acc =
       case g of
         GClaim (Claim act) ->
           case act of
             Simple _ _ _ ->  -- Act Active
-              if S.member (IndexedGen capIdx t (GAct act)) acc
-                 then let newGen = IndexedGen capIdx t (GFulfillment act)
+              if S.member (IndexedGen capIdx time (GAct act)) acc
+                 then let newGen = IndexedGen capIdx time (GFulfillment act)
                       in if S.member newGen acc
                             then acc
                             else S.insert newGen acc
@@ -191,14 +191,14 @@ claimEnforceable state =
   S.foldr derive state state
   where
     derive :: IndexedGen -> Norm -> Norm
-    derive (IndexedGen capIdx t g) acc =
+    derive (IndexedGen capIdx time g) acc =
       case g of
         GClaim (Claim act) ->
           case act of
             Simple _ _ _ ->  -- Act Active
               let counter = activeToPassive act
-              in if S.member (IndexedGen capIdx t (GAct counter)) acc
-                    then let newGen = IndexedGen capIdx t (GEnforceable act)
+              in if S.member (IndexedGen capIdx time (GAct counter)) acc
+                    then let newGen = IndexedGen capIdx time (GEnforceable act)
                          in if S.member newGen acc
                                then acc
                                else S.insert newGen acc
@@ -214,14 +214,14 @@ obligationViolation state =
   S.foldr derive state state
   where
     derive :: IndexedGen -> Norm -> Norm
-    derive (IndexedGen capIdx t g) acc =
+    derive (IndexedGen capIdx time g) acc =
       case g of
         GObligation (Obligation act) ->
           case act of
             Simple _ _ _ ->  -- Act Active
               let counter = activeToPassive act
-              in if S.member (IndexedGen capIdx t (GAct counter)) acc
-                    then let newGen = IndexedGen capIdx t (GViolation counter)
+              in if S.member (IndexedGen capIdx time (GAct counter)) acc
+                    then let newGen = IndexedGen capIdx time (GViolation counter)
                          in if S.member newGen acc
                                then acc
                                else S.insert newGen acc
