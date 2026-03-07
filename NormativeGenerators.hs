@@ -142,6 +142,15 @@ validAt t g = time g <= t
 normAt :: Day -> Norm -> Norm
 normAt t = S.filter (validAt t)
 
+-- Check if a generator is overridden
+isOverridden :: Generator -> Bool
+isOverridden (Overridden _) = True
+isOverridden _ = False
+
+-- Filter norm to exclude overridden generators (for active normative queries)
+activeNorms :: Norm -> Norm
+activeNorms = S.filter (\(IndexedGen _ _ g) -> not (isOverridden g))
+
 
 --------------------------------------------------
 -- LIFTING HELPERS

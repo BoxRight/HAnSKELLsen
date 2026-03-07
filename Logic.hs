@@ -6,7 +6,7 @@ import NormativeGenerators
 import qualified Patrimony as P
 import qualified Data.Set as S
 import Data.Char (toLower)
-import Data.Time.Calendar (fromGregorian)
+import Data.Time.Calendar (Day, fromGregorian)
 
 --------------------------------------------------
 -- SYSTEM STATE (STAGE 4)
@@ -54,6 +54,11 @@ runSystem rules =
 -- STAGE 5: CAPABILITY HIERARCHY
 --------------------------------------------------
 
+-- Epoch date: represents "always valid" or permanent standing conditions
+-- Used for capabilities and other institutional facts that don't have temporal bounds
+epochDate :: Day
+epochDate = fromGregorian 1 1 1
+
 -- Capability hierarchy: defines which capabilities dominate others
 -- constitutional > legislative > administrative > private
 dominates :: CapabilityIndex -> CapabilityIndex -> Bool
@@ -64,11 +69,20 @@ dominates AdministrativePower PrivatePower = True
 dominates a b = a == b
 
 -- Check if two generators conflict (domain-specific)
+-- A conflict occurs when two norms cannot both be valid simultaneously
 conflicts :: Generator -> Generator -> Bool
+-- Prohibition conflicts with privilege (can't both allow and forbid)
 conflicts (GProhibition _) (GPrivilege _) = True
 conflicts (GPrivilege _) (GProhibition _) = True
+-- Obligation conflicts with prohibition (can't be required to do what's forbidden)
 conflicts (GObligation _) (GProhibition _) = True
 conflicts (GProhibition _) (GObligation _) = True
+-- Two conflicting obligations (simplified: any two obligations conflict)
+-- In practice, you'd want more sophisticated conflict detection
+conflicts (GObligation _) (GObligation _) = False  -- Allow multiple obligations
+-- Overridden generators don't conflict (they're already marked as overridden)
+conflicts (Overridden _) _ = False
+conflicts _ (Overridden _) = False
 -- Add more conflict patterns as needed
 conflicts _ _ = False
 
@@ -261,6 +275,7 @@ normToPatrimony st =
 
 -- Patrimony → Normative Mapping (f map)
 -- Capabilities enable institutional participation
+-- Capabilities are standing conditions (permanent facts), not dated events
 patrimonyToNorm :: Rule
 patrimonyToNorm st =
   let norm = normState st
@@ -273,13 +288,15 @@ patrimonyToNorm st =
       case p of
         P.Capability cap ->
           -- Map capability string to capability index
+          -- Use epoch date to represent permanent standing institutional conditions
           let capIdx = capabilityFromString cap
-              newGen = IndexedGen capIdx (fromGregorian 2000 1 1) (GEvent (HumanAct ("capability:" ++ cap)))
+              newGen = IndexedGen capIdx epochDate (GEvent (HumanAct ("capability:" ++ cap)))
           in if S.member newGen acc
                 then acc
                 else S.insert newGen acc
         P.Owned obj ->
-          let newGen = IndexedGen PrivatePower (fromGregorian 2000 1 1) (GEvent (HumanAct ("owns:" ++ show obj)))
+          -- Ownership is also a standing condition (valid from epoch)
+          let newGen = IndexedGen PrivatePower epochDate (GEvent (HumanAct ("owns:" ++ show obj)))
           in if S.member newGen acc
                 then acc
                 else S.insert newGen acc
@@ -341,6 +358,7 @@ statuteCreatesObligation st =
 --------------------------------------------------
 
 -- Override rule: Higher authority can override lower authority norms
+-- This preserves the historical record by marking norms as overridden rather than deleting them
 overrideRule :: Rule
 overrideRule st =
   let norm = normState st
@@ -349,16 +367,26 @@ overrideRule st =
   where
     derive :: IndexedGen -> Norm -> Norm
     derive (IndexedGen c1 t1 g1) acc =
-      S.foldr
-        (\(IndexedGen c2 t2 g2) a ->
-           if dominates c1 c2 && conflicts g1 g2 && t1 >= t2
-              then let newGen = IndexedGen c2 t2 (Overridden g2)
-                   in if S.member newGen a
-                         then a
-                         else S.insert newGen a
-              else a)
-        acc
-        acc
+      -- Only consider non-overridden generators as potential overriders
+      case g1 of
+        Overridden _ -> acc  -- Overridden norms cannot override others
+        _ -> S.foldr
+               (\(IndexedGen c2 t2 g2) a ->
+                  -- Check if g1 can override g2:
+                  -- 1. c1 dominates c2 (hierarchy check)
+                  -- 2. g1 and g2 conflict (semantic check)
+                  -- 3. t1 >= t2 (temporal check: later or equal time)
+                  -- 4. g2 is not already overridden
+                  case g2 of
+                    Overridden _ -> a  -- Don't override already overridden norms
+                    _ -> if dominates c1 c2 && conflicts g1 g2 && t1 >= t2
+                            then let newGen = IndexedGen c2 t2 (Overridden g2)
+                                 in if S.member newGen a
+                                       then a
+                                       else S.insert newGen a
+                            else a)
+               acc
+               acc
 
 --------------------------------------------------
 -- RULE SET
