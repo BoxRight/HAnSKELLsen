@@ -83,7 +83,8 @@ instance Show Generator where
 --------------------------------------------------
 
 data CapabilityIndex
-  = PrivatePower
+  = BaseAuthority
+  | PrivatePower
   | LegislativePower
   | JudicialPower
   | AdministrativePower
@@ -158,6 +159,9 @@ activeNorms = S.filter (\(IndexedGen _ _ g) -> not (isOverridden g))
 
 actGen :: Act r -> Generator
 actGen = GAct
+
+gId :: Generator
+gId = GAct Id
 
 
 claimGen :: Claim r -> Generator

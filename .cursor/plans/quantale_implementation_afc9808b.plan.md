@@ -4,68 +4,68 @@ overview: Implement quantale structure for the legal reasoning system by adding 
 todos:
   - id: add_base_authority
     content: Add BaseAuthority to CapabilityIndex type in NormativeGenerators.hs (bottom element ⊥ of join-semilattice)
-    status: pending
+    status: completed
   - id: add_identity_act
     content: "Add Id :: Act r constructor (polymorphic in r) to LegalOntology.hs with Eq/Ord/Show instances"
-    status: pending
+    status: completed
   - id: add_identity_generator
     content: Add GId as GAct Id (not separate constructor) - helper function in NormativeGenerators.hs
-    status: pending
+    status: completed
     dependencies:
       - add_identity_act
   - id: normalize_acts
     content: Implement normalizeAct function in LegalOntology.hs - Seq [] → Id FIRST, collapse single Seq, remove Id, flatten nested Seq/Par (Par uses Set so already canonical, do NOT collapse Par {a})
-    status: pending
+    status: completed
     dependencies:
       - add_identity_act
   - id: compose_acts
     content: Implement composeActs function in LegalOntology.hs using normalizeAct, preserving type parameter r
-    status: pending
+    status: completed
     dependencies:
       - normalize_acts
   - id: capability_supremum
     content: Implement capabilitySupremum function (in Capability.hs or Logic.hs) as lattice supremum using Ord instance (max a b)
-    status: pending
+    status: completed
   - id: create_quantale_module
     content: Create new Quantale.hs module with imports and module structure
-    status: pending
+    status: completed
   - id: compose_generators
     content: Implement composeGen in Quantale.hs - strict act composition only (GAct a, GAct b), identity works automatically via composeActs, returns normalized acts
-    status: pending
+    status: completed
     dependencies:
       - add_identity_generator
       - compose_acts
   - id: multiply_indexed
     content: Implement mulIndexed in Quantale.hs using capabilitySupremum and max time combination
-    status: pending
+    status: completed
     dependencies:
       - compose_generators
       - capability_supremum
   - id: multiply_norms
     content: Implement mulNorm in Quantale.hs using powerset construction (automatically distributive)
-    status: pending
+    status: completed
     dependencies:
       - multiply_indexed
   - id: unit_norm
     content: Implement unitNorm in Quantale.hs using BaseAuthority (dedicated neutral capability)
-    status: pending
+    status: completed
     dependencies:
       - add_identity_generator
       - add_base_authority
   - id: kleene_star
     content: Implement kleeneStar in Quantale.hs reusing existing fixpoint function from Logic.hs (proven convergence)
-    status: pending
+    status: completed
     dependencies:
       - multiply_norms
       - unit_norm
   - id: integrate_logic
     content: Import Quantale module in Logic.hs and optionally expose operations
-    status: pending
+    status: completed
     dependencies:
       - kleene_star
   - id: add_tests
     content: Add quantale tests to logic.hs - associativity, identity, distributivity, normalization (Id removal, single-element collapse, Seq [] → Id, Par canonicalization), quantale zero tests
-    status: pending
+    status: completed
     dependencies:
       - integrate_logic
 ---

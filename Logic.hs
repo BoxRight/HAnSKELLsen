@@ -3,6 +3,9 @@ module Logic where
 
 import LegalOntology
 import NormativeGenerators
+import Capability (capabilitySupremum)
+import FixedPoint (fixpoint)
+import qualified Quantale as Q
 import qualified Patrimony as P
 import qualified Data.Set as S
 import Data.Char (toLower)
@@ -35,17 +38,6 @@ applyRules :: [Rule] -> SystemState -> SystemState
 applyRules rules state =
   foldl (\s r -> r s) state rules
 
---------------------------------------------------
--- FIXPOINT
---------------------------------------------------
-
-fixpoint :: Eq a => (a -> a) -> a -> a
-fixpoint f x =
-  let x' = f x
-  in if x' == x
-        then x
-        else fixpoint f x'
-
 runSystem :: [Rule] -> SystemState -> SystemState
 runSystem rules =
   fixpoint (applyRules rules)
@@ -66,6 +58,7 @@ dominates ConstitutionalPower _ = True
 dominates LegislativePower AdministrativePower = True
 dominates LegislativePower PrivatePower = True
 dominates AdministrativePower PrivatePower = True
+dominates _ BaseAuthority = True
 dominates a b = a == b
 
 -- Check if two generators conflict (domain-specific)
@@ -160,6 +153,7 @@ deliveryObject obj =
 activeToPassive :: Act Active -> Act Passive
 activeToPassive act =
   case act of
+    Id -> Id
     Simple p obj t -> Counter p obj t
     Seq xs -> Seq (map activeToPassive xs)
     Par xs -> Par (S.map activeToPassive xs)
@@ -169,6 +163,7 @@ activeToPassive act =
 passiveToActive :: Act Passive -> Act Active
 passiveToActive act =
   case act of
+    Id -> Id
     Counter p obj t -> Simple p obj t
     Seq xs -> Seq (map passiveToActive xs)
     Par xs -> Par (S.map passiveToActive xs)
@@ -419,3 +414,7 @@ runExampleNorm norm =
   let initialState = SystemState { normState = norm, patrState = P.emptyPatrimony }
       finalState = runExample initialState
   in normState finalState
+
+-- Expose quantale closure from the same lattice used by the rule engine.
+runQuantaleStar :: Norm -> Norm
+runQuantaleStar = Q.kleeneStar
