@@ -194,8 +194,8 @@ main = do
     print (genClaim1 == genClaim2)  -- Should be True (same claim, same index)
     print (genAct1 == genAct2)  -- Should be False (different acts)
     -- Test that same generator with different indices are different
-    let genClaimPrivate = IndexedGen PrivatePower (GClaim claim)
-    let genClaimLegislative = IndexedGen LegislativePower (GClaim claim)
+    let genClaimPrivate = IndexedGen PrivatePower baseDate (GClaim claim)
+    let genClaimLegislative = IndexedGen LegislativePower baseDate (GClaim claim)
     print (genClaimPrivate == genClaimLegislative)  -- Should be False (different indices)
     putStrLn ""
     
