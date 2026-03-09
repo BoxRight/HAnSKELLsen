@@ -9,13 +9,14 @@ module Runtime.RuleExecution
   , ruleSpecsToRules
   ) where
 
-import Compiler.Compiler
+import Compiler.Compiler (IntrinsicArg(..), ResolvedAct(..), ResolvedCondition(..), RuleSpec(..))
 import qualified Data.Set as S
 import Data.Time.Calendar (Day)
 import LegalOntology
 import Logic (Rule, SystemState(..), epochDate)
 import NormativeGenerators
 import qualified Patrimony as P
+import Runtime.Intrinsics (IntrinsicValue(..), defaultIntrinsicEnv, evaluateIntrinsic)
 import Runtime.Provenance
 
 data ConditionWitness = ConditionWitness
@@ -106,11 +107,46 @@ conditionWitness condition st =
       matchingResolvedActDay act (normState st)
     ResolvedEventCondition event ->
       matchingEventDay event (normState st)
+    ResolvedIntrinsicPredicate name args ->
+      resolveAndEvaluateIntrinsic name args (patrState st)
     ResolvedConjunction subConditions -> do
       witnesses <- traverse (\c -> conditionWitness c st) subConditions
       let combined = foldr1 laterWitness witnesses
           allFacts = concatMap witnessSupportingFacts witnesses
       pure (ConditionWitness (witnessAt combined) allFacts)
+
+resolveAndEvaluateIntrinsic
+  :: String
+  -> [IntrinsicArg]
+  -> P.PatrimonyState
+  -> Maybe ConditionWitness
+resolveAndEvaluateIntrinsic name args patr =
+  case resolveIntrinsicArgs args patr of
+    Nothing -> Nothing
+    Just values ->
+      case evaluateIntrinsic defaultIntrinsicEnv name values of
+        Nothing -> Nothing
+        Just False -> Nothing
+        Just True -> Just (ConditionWitness epochDate [])
+
+resolveIntrinsicArgs :: [IntrinsicArg] -> P.PatrimonyState -> Maybe [IntrinsicValue]
+resolveIntrinsicArgs args patr =
+  traverse (resolveArg patr) args
+  where
+    resolveArg patrState arg =
+      case arg of
+        ResolvedIntrinsicFactRef factName ->
+          case lookupNumericFact factName patrState of
+            Just v -> Just (Left v)
+            Nothing -> Nothing
+        ResolvedIntrinsicLiteral d ->
+          Just (Left d)
+
+lookupNumericFact :: String -> P.PatrimonyState -> Maybe Double
+lookupNumericFact name patr =
+  case [v | P.NumericFact n v <- S.toList patr, n == name] of
+    v : _ -> Just v
+    [] -> Nothing
 
 adjustConsequentTime :: Day -> IndexedGen -> IndexedGen
 adjustConsequentTime witnessDay indexed =

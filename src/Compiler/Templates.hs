@@ -338,8 +338,16 @@ substituteCondition bindings condition =
       ActionConditionAst (substituteAction bindings action)
     EventConditionAst event ->
       EventConditionAst (substituteLegalEvent bindings event)
+    IntrinsicConditionAst name args ->
+      IntrinsicConditionAst name (map (substituteIntrinsicArg bindings) args)
     ConditionConjunctionAst conditions ->
       ConditionConjunctionAst (map (substituteCondition bindings) conditions)
+
+substituteIntrinsicArg :: TemplateBindings -> IntrinsicArgAst -> IntrinsicArgAst
+substituteIntrinsicArg bindings arg =
+  case arg of
+    IntrinsicFactRef name -> IntrinsicFactRef (substituteText bindings name)
+    IntrinsicLiteral d -> IntrinsicLiteral d
 
 substituteRule :: TemplateBindings -> RuleAst -> RuleAst
 substituteRule bindings ruleAst =
@@ -397,6 +405,8 @@ substituteScenarioAssertion bindings assertion =
       ScenarioCounterAct (substituteAction bindings action)
     ScenarioCondition condition ->
       ScenarioCondition (substituteCondition bindings condition)
+    ScenarioNumericAssert factName value ->
+      ScenarioNumericAssert (substituteText bindings factName) value
     ScenarioEvent legalEvent ->
       ScenarioEvent (substituteLegalEvent bindings legalEvent)
 

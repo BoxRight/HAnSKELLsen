@@ -131,10 +131,16 @@ data StandingFactAst
       }
   deriving (Eq, Show)
 
+data IntrinsicArgAst
+  = IntrinsicFactRef String
+  | IntrinsicLiteral Double
+  deriving (Eq, Show)
+
 data ConditionAst
   = InstitutionalConditionAst StandingFactAst
   | ActionConditionAst ActionPhraseAst
   | EventConditionAst LegalEventAst
+  | IntrinsicConditionAst String [IntrinsicArgAst]
   | ConditionConjunctionAst [ConditionAst]
   deriving (Eq, Show)
 
@@ -184,6 +190,7 @@ data ScenarioAssertionAst
   = ScenarioAct ActionPhraseAst
   | ScenarioCounterAct ActionPhraseAst
   | ScenarioCondition ConditionAst
+  | ScenarioNumericAssert String Double
   | ScenarioEvent LegalEventAst
   deriving (Eq, Show)
 

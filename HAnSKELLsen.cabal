@@ -23,6 +23,7 @@ library
     , Pretty.PrettyNorm
     , Pretty.PrettyTrace
     , Pretty.PrettyReport
+    , Runtime.Intrinsics
     , Runtime.Provenance
     , Runtime.RuleExecution
     , Runtime.Audit

@@ -14,7 +14,7 @@ import Data.Time.Calendar (Day)
 import LegalOntology (LegalEvent(..), Object, oName, pName)
 import Logic (SystemState(..))
 import NormativeGenerators
-import Compiler.Compiler (DisplayVerbMap)
+import Compiler.Compiler (DisplayVerbMap, IntrinsicArg(..))
 import Pretty.PrettyNorm
 import Pretty.PrettyTrace
 import Runtime.Audit
@@ -254,8 +254,16 @@ prettyCondition condition =
       prettyResolvedAct act
     ResolvedEventCondition event ->
       prettyLegalEvent event
+    ResolvedIntrinsicPredicate name args ->
+      name ++ " " ++ unwords (map prettyIntrinsicArg args)
     ResolvedConjunction subConditions ->
       intercalate " and " (map prettyCondition subConditions)
+
+prettyIntrinsicArg :: IntrinsicArg -> String
+prettyIntrinsicArg arg =
+  case arg of
+    ResolvedIntrinsicFactRef n -> n
+    ResolvedIntrinsicLiteral d -> show d
 
 prettyDerivedFact :: DisplayVerbMap -> IndexedGen -> [String]
 prettyDerivedFact displayMap indexed =

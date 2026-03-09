@@ -307,6 +307,7 @@ parseScenarioAssertion = do
     [ try parseScenarioNaturalEvent
     , try parseScenarioCounterAct
     , try parseScenarioAct
+    , try parseScenarioNumericAssert
     , try parseScenarioCondition
     , try parseScenarioEvent
     ]
@@ -324,6 +325,19 @@ parseScenarioCounterAct = do
   hspace1
   body <- trim <$> restOfLine
   ScenarioCounterAct <$> either fail pure (parseCounterActionSentence body)
+
+parseScenarioNumericAssert :: Parser ScenarioAssertionAst
+parseScenarioNumericAssert = do
+  _ <- chunk "assert"
+  hspace1
+  _ <- chunk "numeric"
+  hspace1
+  factName <- some (satisfy (\c -> isAlphaNum c || c == '_'))
+  hspace1
+  valueStr <- trim <$> restOfLine
+  case reads valueStr of
+    [(v, "")] -> pure (ScenarioNumericAssert factName v)
+    _ -> fail ("invalid numeric value: " ++ valueStr)
 
 parseScenarioCondition :: Parser ScenarioAssertionAst
 parseScenarioCondition = do
@@ -578,7 +592,40 @@ parseSingleCondition raw =
       case parseEventCondition raw of
         Right eventAst -> Right (EventConditionAst eventAst)
         Left _ ->
-          ActionConditionAst <$> parseActionSentence raw
+          case parseIntrinsicCondition raw of
+            Right cond -> Right cond
+            Left _ -> ActionConditionAst <$> parseActionSentence raw
+
+knownIntrinsics :: [String]
+knownIntrinsics =
+  [ "aboveThreshold"
+  , "belowThreshold"
+  , "between"
+  , "daysBetween"
+  , "withinWindow"
+  , "percentage"
+  , "taxAmount"
+  ]
+
+parseIntrinsicCondition :: String -> Either String ConditionAst
+parseIntrinsicCondition raw =
+  case words (stripSentence raw) of
+    name : rest
+      | name `elem` knownIntrinsics
+      , length rest >= 1 ->
+          case traverse parseIntrinsicArg rest of
+            Right args -> Right (IntrinsicConditionAst name args)
+            Left err -> Left err
+    _ -> Left ("not an intrinsic condition: " ++ raw)
+
+parseIntrinsicArg :: String -> Either String IntrinsicArgAst
+parseIntrinsicArg s =
+  case reads s of
+    [(d, "")] -> Right (IntrinsicLiteral d)
+    _ ->
+      if all (\c -> isAlphaNum c || c == '_') s
+        then Right (IntrinsicFactRef s)
+        else Left ("invalid intrinsic arg: " ++ s)
 
 parseEventCondition :: String -> Either String LegalEventAst
 parseEventCondition raw =

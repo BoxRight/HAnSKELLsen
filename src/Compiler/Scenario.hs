@@ -117,6 +117,13 @@ compileScenarioAssertion meta symbols day assertion =
           }
     ScenarioCondition conditionAst ->
       compileScenarioCondition meta symbols day conditionAst
+    ScenarioNumericAssert factName value ->
+      pure $
+        ScenarioDelta
+          { deltaNormFacts = emptyNorm
+          , deltaPatrFacts = S.singleton (P.NumericFact factName value)
+          , deltaDescriptions = ["Numeric: " ++ factName ++ " = " ++ show value]
+          }
     ScenarioEvent eventAst ->
       let fact =
             indexedGen (lawAuthorityAst meta) day $

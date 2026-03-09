@@ -1,6 +1,7 @@
 module Compiler.Compiler
   ( CompiledLawModule(..)
   , DisplayVerbMap(..)
+  , IntrinsicArg(..)
   , ProcedureIR(..)
   , ResolvedAct(..)
   , ResolvedAction(..)
@@ -49,6 +50,11 @@ data ResolvedAct
   | ResolvedPassiveAct (Act Passive)
   deriving (Eq, Show)
 
+data IntrinsicArg
+  = ResolvedIntrinsicFactRef String
+  | ResolvedIntrinsicLiteral Double
+  deriving (Eq, Show)
+
 data ResolvedCondition
   = ResolvedOwnershipCondition Person Object
   | ResolvedCapabilityCondition CapabilityIndex
@@ -59,6 +65,7 @@ data ResolvedCondition
   | ResolvedApprovedContractorCondition String
   | ResolvedActionCondition ResolvedAct
   | ResolvedEventCondition LegalEvent
+  | ResolvedIntrinsicPredicate String [IntrinsicArg]
   | ResolvedConjunction [ResolvedCondition]
   deriving (Eq, Show)
 
@@ -359,8 +366,16 @@ resolveCondition symbols conditionAst =
       ResolvedActionCondition <$> resolveActionCondition symbols actionAst
     EventConditionAst eventAst ->
       pure (ResolvedEventCondition (legalEventAstToEvent eventAst))
+    IntrinsicConditionAst name args ->
+      pure (ResolvedIntrinsicPredicate name (map intrinsicArgAstToArg args))
     ConditionConjunctionAst conditions ->
       ResolvedConjunction <$> mapM (resolveCondition symbols) conditions
+
+intrinsicArgAstToArg :: IntrinsicArgAst -> IntrinsicArg
+intrinsicArgAstToArg arg =
+  case arg of
+    IntrinsicFactRef name -> ResolvedIntrinsicFactRef name
+    IntrinsicLiteral d -> ResolvedIntrinsicLiteral d
 
 resolveInstitutionalCondition
   :: SymbolTable

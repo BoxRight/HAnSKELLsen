@@ -19,6 +19,7 @@ data PatrimonyGen
   | Collateral String
   | Certification String
   | ApprovedContractor String
+  | NumericFact String Double
   deriving (Eq, Ord, Show)
 
 --------------------------------------------------
