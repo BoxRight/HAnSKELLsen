@@ -5,7 +5,7 @@ Formal legal reasoning prototype in Haskell with:
 - typed legal ontology (`LegalOntology.hs`)
 - indexed normative generators (`NormativeGenerators.hs`)
 - cross-domain inference over normative + patrimony state (`Logic.hs`)
-- quantale operations over norms (`Quantale.hs`)
+- quantale operations over norms (`Quantale.hs`); see [docs/quantale_interpretation.md](docs/quantale_interpretation.md) for the formal algebraic interpretation
 
 ## DSL Boundary
 
@@ -39,6 +39,8 @@ These closures are composable but not the same operator:
 - Quantale closure: computes algebraic closure from multiplication
 
 ## Quantale Laws Implemented
+
+See [docs/quantale_interpretation.md](docs/quantale_interpretation.md) for the full formalization (carrier G, lattice Q = 𝒫(G), Kleisli lifting, rule fixpoint vs Kleene star).
 
 Over `Norm`:
 
