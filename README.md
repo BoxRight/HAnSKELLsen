@@ -19,6 +19,8 @@ The intended split is:
 
 The first two layers should be readable in the DSL. The third should remain mostly implicit and only appear through legal constructs such as procedures, alternatives, and audits.
 
+See [docs/design_boundary.md](docs/design_boundary.md) for the principle that DSL extensions compile down to the existing backend. See [docs/renewable_energy_benchmark.md](docs/renewable_energy_benchmark.md) for the benchmark coverage map and [docs/DSL_grammar.md](docs/DSL_grammar.md) for the full grammar.
+
 ## Two Closure Operators
 
 The system intentionally exposes **two different, orthogonal closures** over the same lattice `Norm = Set IndexedGen`:

@@ -161,7 +161,7 @@ Typical runnable files now live at paths like:
 
 ## Renewable Energy Benchmark
 
-The repository also includes a multi-regime benchmark intended to stress the current DSL boundary before any numeric intrinsic layer is added:
+The repository includes a multi-regime benchmark that stresses the DSL boundary and uses the extended institutional fact vocabulary:
 
 - `lawlib/shared/renewable_project_shared.dsl`
 - `lawlib/statutes/renewable_energy_leasing.dsl`
@@ -172,4 +172,9 @@ The repository also includes a multi-regime benchmark intended to stress the cur
 - `lawlib/contracts/project_insurance.dsl`
 - `lawlib/instantiations/renewable_energy_case.dsl`
 
-See `docs/renewable_energy_benchmark.md` for the coverage map and the ranked backlog of legal-structural gaps versus future computational needs.
+Run with:
+```bash
+cabal run hanskellsen-app -- lawlib/instantiations/renewable_energy_case.dsl --scenario ProjectDisruptionAndStepIn --audit-at 2025-07-20
+```
+
+See [docs/renewable_energy_benchmark.md](renewable_energy_benchmark.md) for the coverage map, what the lawlib uses, and residual computational needs.

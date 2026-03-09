@@ -1,6 +1,6 @@
 # Renewable Energy Benchmark
 
-This benchmark uses a deliberately convoluted multi-regime project to test the current DSL boundary before adding any computational helper layer.
+This benchmark uses a deliberately convoluted multi-regime project to test the DSL boundary and drive legal-structural extensions before adding any computational helper layer.
 
 ## Benchmark Files
 
@@ -22,6 +22,12 @@ The benchmark models:
 - private financing and insurance modules
 - a dated instantiation scenario with storm damage, payment default, bank step-in, repair, and certification
 
+## Running the Benchmark
+
+```bash
+cabal run hanskellsen-app -- lawlib/instantiations/renewable_energy_case.dsl --scenario ProjectDisruptionAndStepIn --audit-at 2025-07-20
+```
+
 ## Coverage Map
 
 ### Directly Expressible Now
@@ -30,76 +36,33 @@ The benchmark models:
 - Layered `lawlib` composition across statutes, contracts, shared declarations, and instantiations.
 - Parties, services, things, money objects, and dated scenarios.
 - Obligations, claims, prohibitions, privileges, and single-condition rules.
+- **Multi-premise rule conditions** (`if A and B and C then ...`).
+- **Override and suspend clauses** (`override <modality> by <condition>`, `suspend <modality> by <condition>`).
+- **Richer institutional facts**: asset, liability, collateral, certification, approved contractor.
+- **Event-triggered rule conditions** (`if event <text>` or `if natural event <text>`).
+- **Temporal validity** (`valid from <date>` or `valid from <date> to <date>` on rules).
+- **Lawyer-readable reports** using domain-specific verbs from vocabulary (grant, pay, install, etc.).
 - Counter-acts for breach modeling.
-- Institutional assertions for ownership, capability, asset, and liability facts.
 - Rule chains that derive later duties from earlier acts or institutional assertions.
 
-### Expressible Now, But Awkwardly
+### Used in This Benchmark
 
-- Bank step-in versus lease termination.
-  - The benchmark models this as a derived duty that the farmer must refrain from termination after the bank assumes step-in.
-  - This approximates override/suspension, but it is not an explicit legal-surface override relation.
+The lawlib currently uses:
 
-- Storm damage and insurance processing.
-  - The benchmark uses asserted liabilities and assets such as `StormDamage`, `InsuranceClaimFiled`, and `ApprovedContractorEngaged`.
-  - This works, but it forces procedural states into generic asset/liability facts.
+- **Approved contractor fact**: `project_insurance.dsl` uses `approved contractor ApprovedContractorEngaged is present` in the repair-permission rule; `renewable_energy_case.dsl` asserts it in the scenario. This replaces the generic asset form for procedural preconditions.
+- Asset and liability facts for `StormDamage` and `InsuranceClaimFiled`.
+- A prohibition-based rule for bank step-in blocking farmer termination (see note below on suspend semantics).
 
-- Administrative certification and tax-credit path.
-  - The benchmark models certification as an act and tax-credit entitlement as a rule consequence.
-  - This captures the dependency chain, but not the full richness of certification status or retroactive application.
+### Expressible But With Semantic Constraints
 
-- Performance and threshold issues.
-  - The benchmark can record the performance problem as a scenario event.
-  - It cannot yet use that event directly in legal rules or compare the project output against a numeric threshold in a legal condition.
+- **Bank step-in versus lease termination**: The benchmark uses a derived prohibition (`Farmer must refrain from terminate LeaseTermination`) when the bank assumes step-in. The DSL also supports `suspend` clauses, but the backend's override semantics (inserting `Overridden` markers) do not currently deactivate the original privilege when the marker is present. For equivalence preservation, the prohibition-based rule is used.
+- **Storm damage and insurance**: Uses asserted liabilities and assets. The `approved contractor` institutional fact is used for the repair-permission precondition.
+- **Performance and threshold issues**: The scenario can record performance problems as events, but rules cannot yet compare against numeric thresholds.
 
-- Domain-specific action rendering.
-  - The benchmark runs, but many actions still collapse to generic delivery or transfer language in reports because the backend act/object representation is more generic than the desired legal surface.
-  - This makes the scenario executable, but less lawyer-readable than intended.
+### Not Yet Expressible
 
-### Not Yet Expressible Cleanly
-
-- Multi-premise rule conditions.
-  - Example: a tax credit should require both certification and compliance with a threshold or filing deadline.
-
-- Explicit override, suspension, or conditional dominance at the legal surface.
-  - Example: bank step-in right suspends farmer termination right.
-
-- Richer institutional relation facts.
-  - Example: collateral assignment, secured creditor status, incorporated-by-reference contract clauses, approved-contractor registries.
-
-- Event-triggered rule conditions for general human or natural events.
-  - Current rules can react to acts or institutional facts, but not directly to `event` or `natural event` assertions.
-
-- Retroactive temporal effect as a first-class legal construct.
-  - The benchmark can represent later-enacted norms and dated events, but not retroactive application semantics explicitly.
-
-- Structured procedural compliance chains.
-  - Example: claim filed within thirty days and repair performed by an approved contractor.
-
-- Numeric and date-based threshold reasoning.
-  - Example: project size above threshold, production below threshold, filing deadline calculations, tax-credit amounts, revenue-share formulas.
-
-## Ranked Legal-Structural Gaps
-
-These should be addressed before adding a computational layer.
-
-1. Multi-premise conditions.
-   This is the biggest structural blocker for real legal chains.
-
-2. Explicit legal-surface override and suspension constructs.
-   This would let the DSL say that one right blocks or suspends another, rather than encoding the effect indirectly.
-
-3. Richer institutional fact vocabulary.
-   Add relation facts for financing, approval, collateral, assignment, certification, and similar legal statuses.
-
-4. Better legal-surface act semantics and reporting.
-   Preserve more domain-specific action meaning through lowering and pretty printing so reports read like the authored law rather than generic transfer/delivery events.
-
-5. Better temporal/legal validity forms.
-   Add constructs for later-enacted effects, retroactivity, filing windows, and temporal applicability conditions.
-
-6. Rule conditions over general events.
-   Let legal rules respond to human or natural events directly instead of only acts and patrimony-like assertions.
+- **Numeric and date-based threshold reasoning**: project size above threshold, production below threshold, filing deadline calculations, tax-credit amounts, revenue-share formulas.
+- **Structured procedural compliance chains**: e.g. claim filed within thirty days and repair performed by an approved contractor (as a single multi-premise condition with date arithmetic).
 
 ## Residual Computational Needs
 
@@ -116,11 +79,10 @@ Likely future intrinsic candidates:
 
 These should be restricted to pure deterministic helpers and used only where the benchmark still needs calculator-like support.
 
-## Guidance
+## Verification
 
-This benchmark supports the following design rule:
+When updating the lawlib to use new DSL constructs, run the benchmark before and after changes and compare output. The compliance verdict, violations, fulfillments, and normative state should remain equivalent when the change is purely syntactic (e.g. `asset X` → `approved contractor X` for the same scenario fact).
 
-- If a feature looks like legal structure, model it in the DSL first.
-- If a feature looks like a calculator or threshold helper, consider a later Haskell-backed intrinsic only after the legal structure is in place.
+## Design Boundary
 
-That keeps the DSL readable as law while still leaving room for a future narrow computation layer where it is genuinely useful.
+See [docs/design_boundary.md](design_boundary.md) for the principle that all DSL extensions compile down to the existing backend structure. The backend remains the stable reasoning kernel.

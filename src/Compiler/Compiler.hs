@@ -136,6 +136,8 @@ buildDisplayVerbMap lawModule symbols _payloads =
         ClauseModality (ProhibitionAst a) -> extractAction symbols a
         ClauseModality (PrivilegeAst a) -> extractAction symbols a
         ClauseRule r -> extractAction symbols (modalityAction (ruleConsequentAst r))
+        ClauseOverride o -> extractAction symbols (modalityAction (overrideTargetAst o))
+        ClauseSuspend s -> extractAction symbols (modalityAction (suspendTargetAst s))
         _ -> []
     modalityAction (ObligationAst a) = a
     modalityAction (ProhibitionAst a) = a

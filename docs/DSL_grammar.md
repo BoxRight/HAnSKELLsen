@@ -54,6 +54,11 @@ scenario <Name>:
         counteract <Party> fails to <verb> <Object> to <Party>.
         assert <Party> owns <Object>.
         assert authority <private|legislative|judicial|administrative|constitutional> is present.
+        assert asset <Name> is present.
+        assert liability <Name> is present.
+        assert collateral <Name> is present.
+        assert certification <Name> is present.
+        assert approved contractor <Name> is present.
         assert event <Text>.
         assert natural event <Text>.
         event <Text>

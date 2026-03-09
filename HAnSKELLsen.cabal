@@ -47,3 +47,26 @@ executable hanskellsen-app
     , time
     , hanskellsen
   default-language:    Haskell2010
+
+test-suite hanskellsen-tests
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Main.hs
+  other-modules:
+      TestBenchmark
+    , TestImportMetadata
+    , TestInstitutionalSemantics
+    , TestInvariants
+  build-depends:
+      base >=4.14 && <5
+    , containers
+    , directory
+    , filepath
+    , megaparsec
+    , time
+    , tasty
+    , tasty-hunit
+    , tasty-quickcheck
+    , QuickCheck
+    , hanskellsen
+  default-language:    Haskell2010

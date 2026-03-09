@@ -4,6 +4,7 @@ module Runtime.Audit
   ( AuditResult(..)
   , lookupScenario
   , runAudit
+  , runAuditFixpoint
   ) where
 
 import Capability (prettyCapability)
