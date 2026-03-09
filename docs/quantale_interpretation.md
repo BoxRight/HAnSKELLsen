@@ -139,6 +139,23 @@ Quantale Module (interpretative)
         Not used by rule engine
 ```
 
+## Quantale Evaluation Mode
+
+The CLI provides a quantale evaluation command that runs analysis over the compiled generator set:
+
+```
+hanskellsen-app quantale <file.dsl>
+```
+
+This compiles the DSL, extracts act generators and procedures, applies quantale operations (`mulNorm`, `joinNorm`, `kleeneStar`), and reports:
+
+- **Act composition graph**: which acts compose in sequence (e.g. `grantLeaseUse → payRent`)
+- **Procedure multiplication**: each procedure as a composed act or join of alternatives
+- **Alternative branches**: procedures with multiple branches (join)
+- **Closure**: size of act generators vs kleeneStar closure
+
+This does not replace the rule engine. Both modes operate over the same compiled ontology.
+
 ## References
 
 - [Quantale.hs](../Quantale.hs) — implementation

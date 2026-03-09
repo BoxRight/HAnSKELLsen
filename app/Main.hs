@@ -2,6 +2,14 @@ module Main where
 
 import Compiler.AST (lawEnactedAst)
 import Compiler.Compiler
+import Runtime.QuantaleAnalysis
+  ( QuantaleOptions(..)
+  , generateQuantaleReportWith
+  , reachabilityReport
+  , cyclesReport
+  , criticalReport
+  , violationPathsReport
+  )
 import Compiler.Imports
 import Compiler.Parser
 import Compiler.Scenario
@@ -33,6 +41,79 @@ data GraphFormat = GraphJson | GraphDot | GraphMermaid
 main :: IO ()
 main = do
   args <- getArgs
+  case args of
+    ("quantale" : rest) -> runQuantaleMode rest
+    _ -> runAuditMode args
+
+runQuantaleMode :: [String] -> IO ()
+runQuantaleMode args = do
+  qopts <- either die pure (parseQuantaleOptions args)
+  let inputPath = qInputPath qopts
+  input <- readFile inputPath
+  case parseLawFile inputPath input of
+    Left bundle -> die (errorBundlePretty bundle)
+    Right surfaceLawModule -> do
+      resolvedImports <- resolveImports surfaceLawModule
+      case resolvedImports of
+        Left diagnostics -> die (unlines (map show diagnostics))
+        Right composedSurfaceLaw ->
+          case expandTemplates composedSurfaceLaw of
+            Left diagnostics -> die (unlines (map show diagnostics))
+            Right lawModule ->
+              case compileLawModule lawModule of
+                Left diagnostics -> die (unlines (map show diagnostics))
+                Right compiled ->
+                  case compileScenarios lawModule of
+                    Left diagnostics -> die (unlines (map show diagnostics))
+                    Right scenarios ->
+                      putStrLn (runQuantaleQuery compiled scenarios qopts)
+
+parseQuantaleOptions :: [String] -> Either String QuantaleOptions
+parseQuantaleOptions args =
+  go defaultOpts args
+  where
+    defaultOpts =
+      QuantaleOptions
+        { qInputPath = defaultInputPath
+        , qReachability = Nothing
+        , qCycles = False
+        , qCritical = False
+        , qViolationPaths = False
+        }
+    go opts [] = Right opts
+    go opts ("--reachability" : label : rest) =
+      go opts { qReachability = Just label } rest
+    go opts ("--reachability" : []) =
+      Left "--reachability requires an act label"
+    go opts ("--cycles" : rest) =
+      go opts { qCycles = True } rest
+    go opts ("--critical" : rest) =
+      go opts { qCritical = True } rest
+    go opts ("--violation-paths" : rest) =
+      go opts { qViolationPaths = True } rest
+    go opts (arg : rest)
+      | "--" `isPrefixOf` arg =
+          Left ("unknown quantale option `" ++ arg ++ "`")
+      | qInputPath opts == defaultInputPath =
+          go opts { qInputPath = arg } rest
+      | otherwise =
+          Left ("unexpected extra argument `" ++ arg ++ "`")
+
+runQuantaleQuery :: CompiledLawModule -> [CompiledScenario] -> QuantaleOptions -> String
+runQuantaleQuery compiled scenarios opts
+  | Just label <- qReachability opts =
+      reachabilityReport compiled scenarios label
+  | qCycles opts =
+      cyclesReport compiled scenarios
+  | qCritical opts =
+      criticalReport compiled scenarios
+  | qViolationPaths opts =
+      violationPathsReport compiled scenarios
+  | otherwise =
+      generateQuantaleReportWith compiled scenarios opts
+
+runAuditMode :: [String] -> IO ()
+runAuditMode args = do
   options <- either die pure (parseCliOptions args)
   let inputPath = fromMaybe defaultInputPath (cliInputPath options)
   input <- readFile inputPath

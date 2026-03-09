@@ -21,6 +21,13 @@ The first two layers should be readable in the DSL. The third should remain most
 
 See [docs/design_boundary.md](docs/design_boundary.md) for the principle that DSL extensions compile down to the existing backend. See [docs/renewable_energy_benchmark.md](docs/renewable_energy_benchmark.md) for the benchmark coverage map and [docs/DSL_grammar.md](docs/DSL_grammar.md) for the full grammar. See [docs/audit_infrastructure.md](docs/audit_infrastructure.md) for scenario replay, JSON export, and derivation graph features.
 
+## CLI Modes
+
+The app supports two interpretations of the same compiled program:
+
+- **Audit mode** (default): `hanskellsen-app <file.dsl> [--scenario NAME] [--audit-at DATE]` — compiles the DSL, runs rule fixpoint closure, and produces a normative audit report.
+- **Quantale mode**: `hanskellsen-app quantale <file.dsl>` — compiles the DSL, extracts act generators and procedures, applies quantale operations (multiplication, join, kleeneStar), and reports act composition analysis, procedure multiplication, and alternative branches.
+
 ## Two Closure Operators
 
 The system intentionally exposes **two different, orthogonal closures** over the same lattice `Norm = Set IndexedGen`:

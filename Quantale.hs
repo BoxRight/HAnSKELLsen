@@ -71,3 +71,15 @@ kleeneStar x =
   where
     step acc = joinNorm acc (mulNorm acc x)
 
+-- | Kleene star with iteration limit to control closure growth.
+-- Returns (closure, hitLimit) so the report can indicate truncation.
+kleeneStarLimited :: Int -> Norm -> (Norm, Bool)
+kleeneStarLimited maxIters x =
+  go 0 (joinNorm unitNorm x)
+  where
+    go n acc
+      | n >= maxIters = (acc, True)
+      | otherwise =
+          let acc' = joinNorm acc (mulNorm acc x)
+          in if acc' == acc then (acc, False) else go (n + 1) acc'
+
