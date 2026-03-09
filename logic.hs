@@ -1,7 +1,10 @@
 import LegalOntology
 import NormativeGenerators
 import Logic
+import Capability
+import Quantale
 import qualified Patrimony as P
+import qualified FixedPoint as FP
 import Data.Time.Calendar (fromGregorian)
 import qualified Data.Set as S
 
@@ -308,3 +311,41 @@ main = do
     putStrLn "After override rule (legislative should override private):"
     print (normState overrideDerived)
     putStrLn "  (Look for Overridden(...) generators)"
+
+    putStrLn ""
+    putStrLn "=== Testing Capability Module ==="
+    print (capabilitySupremum BaseAuthority PrivatePower)
+    print (capabilitySupremum PrivatePower LegislativePower)
+    print (capabilitySupremum AdministrativePower ConstitutionalPower)
+
+    putStrLn ""
+    putStrLn "=== Testing Quantale Module ==="
+    let qA = S.fromList [IndexedGen PrivatePower baseDate (GAct simpleAct1)]
+    let qB = S.fromList [IndexedGen PrivatePower laterDate (GAct simpleAct2)]
+    let qUnit = unitNorm
+    let qMul = mulNorm qA qB
+    let qJoin = joinNorm qA qB
+    let qStar = kleeneStar qA
+
+    putStrLn "Quantale multiplication (A ⊗ B):"
+    print qMul
+    putStrLn "Quantale join (A ∨ B):"
+    print qJoin
+    putStrLn "Quantale unit:"
+    print qUnit
+    putStrLn "Kleene star of A:"
+    print qStar
+    putStrLn "Identity laws:"
+    print (mulNorm qUnit qA == qA)
+    print (mulNorm qA qUnit == qA)
+    print (mulNorm qUnit qUnit == qUnit)
+    putStrLn "Zero laws:"
+    print (mulNorm emptyNorm qA == emptyNorm)
+    print (mulNorm qA emptyNorm == emptyNorm)
+    putStrLn "Distributivity sample:"
+    print (mulNorm qA (joinNorm qA qB) == joinNorm (mulNorm qA qA) (mulNorm qA qB))
+
+    putStrLn ""
+    putStrLn "=== Testing FixedPoint Module ==="
+    -- x = 10 is a fixpoint of min 10 (x + 3)
+    print (FP.fixpoint (\x -> min 10 (x + (3 :: Int))) (0 :: Int))

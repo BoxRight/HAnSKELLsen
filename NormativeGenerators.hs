@@ -83,7 +83,8 @@ instance Show Generator where
 --------------------------------------------------
 
 data CapabilityIndex
-  = PrivatePower
+  = BaseAuthority
+  | PrivatePower
   | LegislativePower
   | JudicialPower
   | AdministrativePower

@@ -1,0 +1,37 @@
+cabal-version:      2.4
+name:               hanskellsen
+version:            0.1.0.0
+build-type:         Simple
+
+library
+  hs-source-dirs:      . src
+  exposed-modules:
+      Capability
+    , FixedPoint
+    , LegalOntology
+    , Logic
+    , NormativeGenerators
+    , Patrimony
+    , Quantale
+    , Compiler.AST
+    , Compiler.SymbolTable
+    , Compiler.Parser
+    , Compiler.Compiler
+    , Pretty.PrettyNorm
+    , Pretty.PrettyTrace
+    , Pretty.PrettyReport
+  build-depends:
+      base >=4.14 && <5
+    , containers
+    , megaparsec
+    , time
+  default-language:    Haskell2010
+
+executable hanskellsen-app
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  build-depends:
+      base >=4.14 && <5
+    , megaparsec
+    , hanskellsen
+  default-language:    Haskell2010

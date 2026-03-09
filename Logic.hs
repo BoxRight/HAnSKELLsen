@@ -1,11 +1,12 @@
 {-# LANGUAGE GADTs #-}
 module Logic where
 
+import Capability (capabilityDominates, parseCapability)
+import FixedPoint (fixpoint)
 import LegalOntology
 import NormativeGenerators
 import qualified Patrimony as P
 import qualified Data.Set as S
-import Data.Char (toLower)
 import Data.Time.Calendar (Day, fromGregorian)
 
 --------------------------------------------------
@@ -35,17 +36,6 @@ applyRules :: [Rule] -> SystemState -> SystemState
 applyRules rules state =
   foldl (\s r -> r s) state rules
 
---------------------------------------------------
--- FIXPOINT
---------------------------------------------------
-
-fixpoint :: Eq a => (a -> a) -> a -> a
-fixpoint f x =
-  let x' = f x
-  in if x' == x
-        then x
-        else fixpoint f x'
-
 runSystem :: [Rule] -> SystemState -> SystemState
 runSystem rules =
   fixpoint (applyRules rules)
@@ -59,14 +49,9 @@ runSystem rules =
 epochDate :: Day
 epochDate = fromGregorian 1 1 1
 
--- Capability hierarchy: defines which capabilities dominate others
--- constitutional > legislative > administrative > private
+-- Capability hierarchy is defined centrally in Capability.hs.
 dominates :: CapabilityIndex -> CapabilityIndex -> Bool
-dominates ConstitutionalPower _ = True
-dominates LegislativePower AdministrativePower = True
-dominates LegislativePower PrivatePower = True
-dominates AdministrativePower PrivatePower = True
-dominates a b = a == b
+dominates = capabilityDominates
 
 -- Check if two generators conflict (domain-specific)
 -- A conflict occurs when two norms cannot both be valid simultaneously
@@ -160,6 +145,7 @@ deliveryObject obj =
 activeToPassive :: Act Active -> Act Passive
 activeToPassive act =
   case act of
+    Id -> Id
     Simple p obj t -> Counter p obj t
     Seq xs -> Seq (map activeToPassive xs)
     Par xs -> Par (S.map activeToPassive xs)
@@ -169,6 +155,7 @@ activeToPassive act =
 passiveToActive :: Act Passive -> Act Active
 passiveToActive act =
   case act of
+    Id -> Id
     Counter p obj t -> Simple p obj t
     Seq xs -> Seq (map passiveToActive xs)
     Par xs -> Par (S.map passiveToActive xs)
@@ -289,11 +276,13 @@ patrimonyToNorm st =
         P.Capability cap ->
           -- Map capability string to capability index
           -- Use epoch date to represent permanent standing institutional conditions
-          let capIdx = capabilityFromString cap
-              newGen = IndexedGen capIdx epochDate (GEvent (HumanAct ("capability:" ++ cap)))
-          in if S.member newGen acc
-                then acc
-                else S.insert newGen acc
+          case parseCapability cap of
+            Left _ -> acc
+            Right capIdx ->
+              let newGen = IndexedGen capIdx epochDate (GEvent (HumanAct ("capability:" ++ cap)))
+              in if S.member newGen acc
+                    then acc
+                    else S.insert newGen acc
         P.Owned obj ->
           -- Ownership is also a standing condition (valid from epoch)
           let newGen = IndexedGen PrivatePower epochDate (GEvent (HumanAct ("owns:" ++ show obj)))
@@ -302,16 +291,6 @@ patrimonyToNorm st =
                 else S.insert newGen acc
         _ -> acc
 
--- Helper to map capability strings to indices
-capabilityFromString :: String -> CapabilityIndex
-capabilityFromString s
-  | "legislative" `elem` words (map toLower s) = LegislativePower
-  | "judicial" `elem` words (map toLower s) = JudicialPower
-  | "administrative" `elem` words (map toLower s) = AdministrativePower
-  | "constitutional" `elem` words (map toLower s) = ConstitutionalPower
-  | otherwise = PrivatePower
-
---------------------------------------------------
 -- STAGE 5: AUTHORITY RULES
 --------------------------------------------------
 
@@ -321,7 +300,8 @@ legislationRule st =
   let norm = normState st
       patr = patrState st
       -- Check if legislative capability exists
-      hasLegislative = S.member (P.Capability "legislative_power") patr
+      hasLegislative =
+        any hasLegislativePower (S.toList patr)
       newNorm = if hasLegislative
                    then S.foldr derive norm norm
                    else norm
@@ -352,6 +332,15 @@ statuteCreatesObligation st =
             then acc
             else S.insert newGen acc
     derive _ acc = acc
+
+hasLegislativePower :: P.PatrimonyGen -> Bool
+hasLegislativePower patrimonyGen =
+  case patrimonyGen of
+    P.Capability raw ->
+      case parseCapability raw of
+        Right LegislativePower -> True
+        _ -> False
+    _ -> False
 
 --------------------------------------------------
 -- HIERARCHY AND TEMPORAL RULES

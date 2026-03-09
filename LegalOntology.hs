@@ -69,6 +69,9 @@ data Passive
 
 data Act r where
 
+  Id
+    :: Act r
+
   Simple
     :: Person
     -> Object
@@ -92,6 +95,45 @@ data Act r where
 deriving instance Eq   (Act r)
 deriving instance Ord  (Act r)
 deriving instance Show (Act r)
+
+flattenSeq :: [Act r] -> [Act r]
+flattenSeq (Seq xs : ys) = flattenSeq (xs ++ ys)
+flattenSeq (x : xs)      = x : flattenSeq xs
+flattenSeq []            = []
+
+flattenPar :: S.Set (Act r) -> S.Set (Act r)
+flattenPar xs =
+  S.foldr
+    (\a acc ->
+      case a of
+        Par ys -> S.union (flattenPar ys) acc
+        _ -> S.insert a acc
+    )
+    S.empty
+    xs
+
+normalizeAct :: Act r -> Act r
+normalizeAct act =
+  case act of
+    Id -> Id
+    Simple p o t -> Simple p o t
+    Counter p o t -> Counter p o t
+    Seq xs ->
+      let flattened = flattenSeq (map normalizeAct xs)
+          noId = filter (/= Id) flattened
+      in case noId of
+          [] -> Id
+          [x] -> x
+          ys -> Seq ys
+    Par xs ->
+      let flattened = flattenPar (S.map normalizeAct xs)
+          noId = S.delete Id flattened
+      in if S.null noId
+            then Id
+            else Par noId
+
+composeActs :: Act r -> Act r -> Act r
+composeActs a b = normalizeAct (Seq [a, b])
 
 
 --------------------------------------------------
