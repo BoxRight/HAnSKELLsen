@@ -158,3 +158,18 @@ Typical runnable files now live at paths like:
 - `lawlib/instantiations/car_sale_case.dsl`
 - `lawlib/instantiations/residential_lease.dsl`
 - `lawlib/instantiations/templated_residential_lease.dsl`
+
+## Renewable Energy Benchmark
+
+The repository also includes a multi-regime benchmark intended to stress the current DSL boundary before any numeric intrinsic layer is added:
+
+- `lawlib/shared/renewable_project_shared.dsl`
+- `lawlib/statutes/renewable_energy_leasing.dsl`
+- `lawlib/statutes/biodiversity_regulation.dsl`
+- `lawlib/statutes/renewable_tax_credit.dsl`
+- `lawlib/contracts/solar_farm_lease.dsl`
+- `lawlib/contracts/project_financing.dsl`
+- `lawlib/contracts/project_insurance.dsl`
+- `lawlib/instantiations/renewable_energy_case.dsl`
+
+See `docs/renewable_energy_benchmark.md` for the coverage map and the ranked backlog of legal-structural gaps versus future computational needs.
