@@ -37,7 +37,7 @@ scenario ProjectDisruptionAndStepIn:
     at 2025-06-26
         act Bank assumes StepInService to Developer.
     at 2025-06-28
-        assert asset ApprovedContractorEngaged is present.
+        assert approved contractor ApprovedContractorEngaged is present.
     at 2025-07-05
         act Developer repairs RepairService to Farmer.
     at 2025-07-15

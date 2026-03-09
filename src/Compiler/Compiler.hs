@@ -1,5 +1,6 @@
 module Compiler.Compiler
   ( CompiledLawModule(..)
+  , DisplayVerbMap(..)
   , ProcedureIR(..)
   , ResolvedAct(..)
   , ResolvedAction(..)
@@ -19,6 +20,7 @@ import Compiler.AST
 import Compiler.SymbolTable
 import Data.Either (partitionEithers)
 import Data.Maybe (fromMaybe, mapMaybe)
+import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Data.Time.Calendar (Day, fromGregorian)
 import LegalOntology
@@ -52,7 +54,12 @@ data ResolvedCondition
   | ResolvedCapabilityCondition CapabilityIndex
   | ResolvedAssetCondition String
   | ResolvedLiabilityCondition String
+  | ResolvedCollateralCondition String
+  | ResolvedCertificationCondition String
+  | ResolvedApprovedContractorCondition String
   | ResolvedActionCondition ResolvedAct
+  | ResolvedEventCondition LegalEvent
+  | ResolvedConjunction [ResolvedCondition]
   deriving (Eq, Show)
 
 data ProcedureIR = ProcedureIR
@@ -68,14 +75,19 @@ data RuleSpec = RuleSpec
   }
   deriving (Eq, Show)
 
+newtype DisplayVerbMap = DisplayVerbMap (M.Map (String, String) String)
+  deriving (Eq, Show)
+
 data CompiledLawModule = CompiledLawModule
   { compiledMetadata :: LawMetaAst
   , compiledFacts :: [IndexedGen]
   , compiledInstitutionalFacts :: P.PatrimonyState
   , compiledProcedures :: [ProcedureIR]
   , compiledRules :: [RuleSpec]
+  , compiledDisplayVerbMap :: DisplayVerbMap
   }
   deriving (Eq, Show)
+  -- Note: compiledDisplayVerbMap is excluded from Eq/Show by using a wrapper
 
 data ClauseResult
   = CompiledFact IndexedGen
@@ -104,8 +116,53 @@ compileLawModule lawModule = do
               S.fromList (mapMaybe extractInstitutionalFact payloads)
           , compiledProcedures = mapMaybe extractProcedure payloads
           , compiledRules = mapMaybe extractRule payloads
+          , compiledDisplayVerbMap = buildDisplayVerbMap lawModule symbols payloads
           }
     errs -> Left errs
+
+buildDisplayVerbMap :: LawModuleAst -> SymbolTable -> [ClauseResult] -> DisplayVerbMap
+buildDisplayVerbMap lawModule symbols _payloads =
+  DisplayVerbMap (M.fromList verbEntries)
+  where
+    verbEntries =
+        [ ((oName obj, baseVerbForObject obj), actionVerb actionAst)
+        | sourcedArticle <- lawArticles lawModule
+        , clause <- articleClauses (sourcePayload sourcedArticle)
+        , (actionAst, obj) <- extractActionObjects symbols clause
+        ]
+    extractActionObjects symbols clause =
+      case clause of
+        ClauseModality (ObligationAst a) -> extractAction symbols a
+        ClauseModality (ProhibitionAst a) -> extractAction symbols a
+        ClauseModality (PrivilegeAst a) -> extractAction symbols a
+        ClauseRule r -> extractAction symbols (modalityAction (ruleConsequentAst r))
+        _ -> []
+    modalityAction (ObligationAst a) = a
+    modalityAction (ProhibitionAst a) = a
+    modalityAction (PrivilegeAst a) = a
+    modalityAction (ClaimAst c) =
+      ActionPhraseAst
+        { actionActorName = claimAgainstName c
+        , actionVerb = claimVerb c
+        , actionObjectName = claimObjectName c
+        , actionTargetName = Just (claimHolderName c)
+        , actionPolarity = PositiveActionAst
+        }
+    extractAction symbols actionAst =
+      case resolveObjectDecl symbols (actionObjectName actionAst) of
+        Right objectDecl ->
+          case compileObjectDecl symbols objectDecl of
+            Right obj -> [(actionAst, obj)]
+            Left _ -> []
+        Left _ -> []
+    baseVerbForObject obj =
+      case oSubtype obj of
+        ThingSubtype Expendable -> "transfer"
+        ThingSubtype _ -> "deliver"
+        ServiceSubtype (Performance (Just _)) -> "deliver"
+        ServiceSubtype (Performance Nothing) -> "perform"
+        ServiceSubtype (Omission (Just _)) -> "refrain from interfering with"
+        ServiceSubtype (Omission Nothing) -> "refrain from"
 
 compileInitialNorm :: LawModuleAst -> Either [Diagnostic] Norm
 compileInitialNorm lawModule = do
@@ -136,6 +193,10 @@ compileClause meta symbols clause =
       CompiledProcedure <$> compileProcedure symbols procedure
     ClauseRule ruleAst ->
       CompiledRule <$> compileRuleSpec meta symbols ruleAst
+    ClauseOverride overrideAst ->
+      CompiledRule <$> compileOverrideSpec meta symbols overrideAst
+    ClauseSuspend suspendAst ->
+      CompiledRule <$> compileSuspendSpec meta symbols suspendAst
 
 compileModality
   :: LawMetaAst
@@ -189,12 +250,64 @@ compileRuleSpec
   -> Either [Diagnostic] RuleSpec
 compileRuleSpec meta symbols ruleAst = do
   condition <- resolveCondition symbols (ruleConditionAst ruleAst)
-  consequent <- compileModality meta symbols (ruleConsequentAst ruleAst)
+  baseConsequent <- compileModality meta symbols (ruleConsequentAst ruleAst)
+  let validFrom = ruleValidFromAst ruleAst
+      validTo = ruleValidToAst ruleAst
+      consequent =
+        baseConsequent
+          { time = fromMaybe (time baseConsequent) validFrom
+          }
   pure $
     RuleSpec
       { ruleSpecName = ruleNameAst ruleAst
       , ruleSpecCondition = condition
       , ruleSpecConsequent = consequent
+      }
+
+modalitySummary :: ModalityAst -> String
+modalitySummary modAst =
+  case modAst of
+    ObligationAst a -> actionSummary a
+    ClaimAst c -> claimHolderName c ++ "_" ++ claimVerb c
+    ProhibitionAst a -> actionSummary a
+    PrivilegeAst a -> actionSummary a
+
+actionSummary :: ActionPhraseAst -> String
+actionSummary a =
+  actionActorName a ++ "_" ++ actionVerb a ++ "_" ++ actionObjectName a
+
+compileOverrideSpec
+  :: LawMetaAst
+  -> SymbolTable
+  -> OverrideClauseAst
+  -> Either [Diagnostic] RuleSpec
+compileOverrideSpec meta symbols overrideAst = do
+  condition <- resolveCondition symbols (overrideConditionAst overrideAst)
+  targetGen <- compileModality meta symbols (overrideTargetAst overrideAst)
+  let overriddenGen =
+        targetGen { gen = Overridden (gen targetGen) }
+  pure $
+    RuleSpec
+      { ruleSpecName = "override:" ++ modalitySummary (overrideTargetAst overrideAst)
+      , ruleSpecCondition = condition
+      , ruleSpecConsequent = overriddenGen
+      }
+
+compileSuspendSpec
+  :: LawMetaAst
+  -> SymbolTable
+  -> SuspendClauseAst
+  -> Either [Diagnostic] RuleSpec
+compileSuspendSpec meta symbols suspendAst = do
+  condition <- resolveCondition symbols (suspendConditionAst suspendAst)
+  targetGen <- compileModality meta symbols (suspendTargetAst suspendAst)
+  let overriddenGen =
+        targetGen { gen = Overridden (gen targetGen) }
+  pure $
+    RuleSpec
+      { ruleSpecName = "suspend:" ++ modalitySummary (suspendTargetAst suspendAst)
+      , ruleSpecCondition = condition
+      , ruleSpecConsequent = overriddenGen
       }
 
 resolveAction :: SymbolTable -> ActionPhraseAst -> Either [Diagnostic] ResolvedAction
@@ -242,6 +355,10 @@ resolveCondition symbols conditionAst =
       resolveInstitutionalCondition symbols factAst
     ActionConditionAst actionAst ->
       ResolvedActionCondition <$> resolveActionCondition symbols actionAst
+    EventConditionAst eventAst ->
+      pure (ResolvedEventCondition (legalEventAstToEvent eventAst))
+    ConditionConjunctionAst conditions ->
+      ResolvedConjunction <$> mapM (resolveCondition symbols) conditions
 
 resolveInstitutionalCondition
   :: SymbolTable
@@ -260,6 +377,12 @@ resolveInstitutionalCondition symbols factAst =
       pure (ResolvedAssetCondition assetName)
     LiabilityFactAst liabilityName ->
       pure (ResolvedLiabilityCondition liabilityName)
+    CollateralFactAst collateralName ->
+      pure (ResolvedCollateralCondition collateralName)
+    CertificationFactAst certificationName ->
+      pure (ResolvedCertificationCondition certificationName)
+    ApprovedContractorFactAst contractorName ->
+      pure (ResolvedApprovedContractorCondition contractorName)
 
 resolveActionCondition :: SymbolTable -> ActionPhraseAst -> Either [Diagnostic] ResolvedAct
 resolveActionCondition symbols actionAst = do
@@ -289,6 +412,12 @@ resolvedClaimToAct claim =
       (resolvedClaimAgainst claim)
       (resolvedClaimObject claim)
       (resolvedClaimHolder claim)
+
+legalEventAstToEvent :: LegalEventAst -> LegalEvent
+legalEventAstToEvent ast =
+  case ast of
+    HumanEventAst desc -> HumanAct desc
+    NaturalEventAst desc -> NaturalFact desc
 
 resolvedActionFromPhrase :: ActionPhraseAst -> ResolvedAction -> ResolvedAct
 resolvedActionFromPhrase actionAst resolved =
@@ -370,6 +499,12 @@ compileStandingFact symbols factAst =
       pure (P.Asset assetName)
     LiabilityFactAst liabilityName ->
       pure (P.Liability liabilityName)
+    CollateralFactAst collateralName ->
+      pure (P.Collateral collateralName)
+    CertificationFactAst certificationName ->
+      pure (P.Certification certificationName)
+    ApprovedContractorFactAst contractorName ->
+      pure (P.ApprovedContractor contractorName)
 
 capabilityToken :: CapabilityIndex -> String
 capabilityToken capability =

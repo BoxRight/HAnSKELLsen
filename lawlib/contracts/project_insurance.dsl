@@ -15,5 +15,5 @@ article 2 Claim And Repair Path
         If asset InsuranceClaimFiled is present
         then Insurer must pay InsurancePayout to Developer.
     rule RepairPermissionAfterApprovedContractor
-        If asset ApprovedContractorEngaged is present
+        If approved contractor ApprovedContractorEngaged is present
         then Developer may repair RepairService to Farmer.

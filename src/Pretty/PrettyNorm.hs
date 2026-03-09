@@ -5,11 +5,15 @@ module Pretty.PrettyNorm
   , prettyClaim
   , prettyGenerator
   , prettyIndexedGen
+  , prettyIndexedGenWithDisplay
   , prettyModalityHeading
   ) where
 
 import Capability (prettyCapability)
+import Compiler.Compiler (DisplayVerbMap(..))
 import Data.Char (toLower)
+import Data.Maybe (fromMaybe)
+import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import LegalOntology
 import NormativeGenerators
@@ -17,6 +21,10 @@ import NormativeGenerators
 prettyIndexedGen :: IndexedGen -> String
 prettyIndexedGen indexed =
   prettyGenerator (gen indexed)
+
+prettyIndexedGenWithDisplay :: DisplayVerbMap -> IndexedGen -> String
+prettyIndexedGenWithDisplay displayMap indexed =
+  prettyGeneratorWithDisplay displayMap (gen indexed)
     ++ " ["
     ++ prettyCapability (capIndex indexed)
     ++ ", "
@@ -25,53 +33,57 @@ prettyIndexedGen indexed =
 
 prettyGenerator :: Generator -> String
 prettyGenerator generator =
+  prettyGeneratorWithDisplay (DisplayVerbMap M.empty) generator
+
+prettyGeneratorWithDisplay :: DisplayVerbMap -> Generator -> String
+prettyGeneratorWithDisplay displayMap generator =
   case generator of
     GAct act ->
-      prettyAct act ++ "."
+      prettyActWithDisplay displayMap act ++ "."
     GClaim claim ->
-      prettyClaim claim ++ "."
+      prettyClaimWithDisplay displayMap claim ++ "."
     GObligation (Obligation act) ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyObligation act
+        ++ prettyObligationWithDisplay displayMap act
         ++ "."
     GProhibition (Prohibition act) ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyProhibition act
+        ++ prettyProhibitionWithDisplay displayMap act
         ++ "."
     GPrivilege (Privilege act) ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyPrivilege act
+        ++ prettyPrivilegeWithDisplay displayMap act
         ++ "."
     GEvent event ->
       prettyEvent event ++ "."
     GFulfillment act ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyFulfillment act
+        ++ prettyFulfillmentWithDisplay displayMap act
         ++ "."
     GViolation act ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyViolation act
+        ++ prettyViolationWithDisplay displayMap act
         ++ "."
     GEnforceable act ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyEnforceable act
+        ++ prettyEnforceableWithDisplay displayMap act
         ++ "."
     GStatute act ->
       prettyModalityHeading generator
         ++ "\n\n"
-        ++ prettyStatute act
+        ++ prettyStatuteWithDisplay displayMap act
         ++ "."
     Overridden inner ->
       prettyModalityHeading generator
         ++ "\n\n"
         ++ "Overridden norm: "
-        ++ stripTrailingPeriod (prettyGenerator inner)
+        ++ stripTrailingPeriod (prettyGeneratorWithDisplay displayMap inner)
         ++ "."
 
 prettyModalityHeading :: Generator -> String
@@ -91,25 +103,49 @@ prettyModalityHeading generator =
 
 prettyAct :: Act r -> String
 prettyAct act =
+  prettyActWithDisplay (DisplayVerbMap M.empty) act
+
+prettyActWithDisplay :: DisplayVerbMap -> Act r -> String
+prettyActWithDisplay displayMap act =
   case act of
     Id -> "The identity act applies"
     Simple actor obj target ->
-      prettyPerson actor ++ " " ++ actionPredicate obj ++ targetSuffix target
+      prettyPerson actor ++ " " ++ actionPredicateWithDisplay displayMap obj ++ targetSuffix target
     Counter actor obj target ->
       prettyPerson actor ++ " performs the counter-act for " ++ objectReference obj ++ " against " ++ prettyPerson target
     Seq acts ->
-      joinWith " then " (map prettyAct acts)
+      joinWith " then " (map (prettyActWithDisplay displayMap) acts)
     Par acts ->
-      joinWith " in parallel with " (map prettyAct (S.toList acts))
+      joinWith " in parallel with " (map (prettyActWithDisplay displayMap) (S.toList acts))
+
+actionPredicateWithDisplay :: DisplayVerbMap -> Object -> String
+actionPredicateWithDisplay (DisplayVerbMap m) obj =
+  let base = baseVerbForObject obj
+      surface = M.lookup (oName obj, base) m
+  in fromMaybe (actionPredicate obj) (fmap (\v -> v ++ " " ++ objectReference obj) surface)
+
+baseVerbForObject :: Object -> String
+baseVerbForObject obj =
+  case oSubtype obj of
+    ThingSubtype Expendable -> "transfer"
+    ThingSubtype _ -> "deliver"
+    ServiceSubtype (Performance (Just _)) -> "deliver"
+    ServiceSubtype (Performance Nothing) -> "perform"
+    ServiceSubtype (Omission (Just _)) -> "refrain from interfering with"
+    ServiceSubtype (Omission Nothing) -> "refrain from"
 
 prettyClaim :: Claim r -> String
-prettyClaim (Claim act) =
+prettyClaim claim =
+  prettyClaimWithDisplay (DisplayVerbMap M.empty) claim
+
+prettyClaimWithDisplay :: DisplayVerbMap -> Claim r -> String
+prettyClaimWithDisplay displayMap (Claim act) =
   case act of
     Simple actor obj target ->
       "Derived claim\n\n"
         ++ prettyPerson target
         ++ " may demand "
-        ++ demandPhrase obj
+        ++ demandPhraseWithDisplay displayMap obj
         ++ " from "
         ++ prettyPerson actor
     Counter actor obj target ->
@@ -121,53 +157,87 @@ prettyClaim (Claim act) =
         ++ prettyPerson actor
     _ ->
       "Derived claim\n\n"
-        ++ stripTrailingPeriod (prettyAct act)
+        ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyObligation :: Act r -> String
 prettyObligation act =
+  prettyObligationWithDisplay (DisplayVerbMap M.empty) act
+
+prettyObligationWithDisplay :: DisplayVerbMap -> Act r -> String
+prettyObligationWithDisplay displayMap act =
   case act of
     Simple actor obj target ->
-      prettyPerson actor ++ " must " ++ actionPredicate obj ++ targetSuffix target
+      prettyPerson actor ++ " must " ++ actionPredicateWithDisplay displayMap obj ++ targetSuffix target
     Counter actor obj target ->
       prettyPerson actor ++ " must refrain from the counter-act for " ++ objectReference obj ++ " against " ++ prettyPerson target
     _ ->
-      stripTrailingPeriod (prettyAct act)
+      stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyProhibition :: Act r -> String
 prettyProhibition act =
+  prettyProhibitionWithDisplay (DisplayVerbMap M.empty) act
+
+prettyProhibitionWithDisplay :: DisplayVerbMap -> Act r -> String
+prettyProhibitionWithDisplay displayMap act =
   case act of
     Simple actor obj target ->
-      prettyPerson actor ++ " must not " ++ basePredicate obj ++ targetSuffix target
+      prettyPerson actor ++ " must not " ++ basePredicateWithDisplay displayMap obj ++ targetSuffix target
     Counter actor obj target ->
       prettyPerson actor ++ " must not perform the counter-act for " ++ objectReference obj ++ " against " ++ prettyPerson target
     _ ->
-      "A prohibited act exists: " ++ stripTrailingPeriod (prettyAct act)
+      "A prohibited act exists: " ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
+
+basePredicateWithDisplay :: DisplayVerbMap -> Object -> String
+basePredicateWithDisplay (DisplayVerbMap m) obj =
+  let base = baseVerbForObject obj
+      surface = M.lookup (oName obj, base) m
+  in fromMaybe (basePredicate obj) (fmap (\v -> v ++ " " ++ objectReference obj) surface)
 
 prettyPrivilege :: Act r -> String
 prettyPrivilege act =
+  prettyPrivilegeWithDisplay (DisplayVerbMap M.empty) act
+
+prettyPrivilegeWithDisplay :: DisplayVerbMap -> Act r -> String
+prettyPrivilegeWithDisplay displayMap act =
   case act of
     Simple actor obj target ->
-      prettyPerson actor ++ " may " ++ basePredicate obj ++ targetSuffix target
+      prettyPerson actor ++ " may " ++ basePredicateWithDisplay displayMap obj ++ targetSuffix target
     Counter actor obj target ->
       prettyPerson actor ++ " may perform the counter-act for " ++ objectReference obj ++ " against " ++ prettyPerson target
     _ ->
-      "A privilege exists: " ++ stripTrailingPeriod (prettyAct act)
+      "A privilege exists: " ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyFulfillment :: Act Active -> String
 prettyFulfillment act =
-  "The following act was fulfilled: " ++ stripTrailingPeriod (prettyAct act)
+  prettyFulfillmentWithDisplay (DisplayVerbMap M.empty) act
+
+prettyFulfillmentWithDisplay :: DisplayVerbMap -> Act Active -> String
+prettyFulfillmentWithDisplay displayMap act =
+  "The following act was fulfilled: " ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyViolation :: Act Passive -> String
 prettyViolation act =
-  "The following counter-act occurred, creating a violation: " ++ stripTrailingPeriod (prettyAct act)
+  prettyViolationWithDisplay (DisplayVerbMap M.empty) act
+
+prettyViolationWithDisplay :: DisplayVerbMap -> Act Passive -> String
+prettyViolationWithDisplay displayMap act =
+  "The following counter-act occurred, creating a violation: " ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyEnforceable :: Act Active -> String
 prettyEnforceable act =
-  "The following claim became enforceable: " ++ stripTrailingPeriod (prettyAct act)
+  prettyEnforceableWithDisplay (DisplayVerbMap M.empty) act
+
+prettyEnforceableWithDisplay :: DisplayVerbMap -> Act Active -> String
+prettyEnforceableWithDisplay displayMap act =
+  "The following claim became enforceable: " ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyStatute :: Act Active -> String
 prettyStatute act =
-  "A legislative act was recognized as a statute: " ++ stripTrailingPeriod (prettyAct act)
+  prettyStatuteWithDisplay (DisplayVerbMap M.empty) act
+
+prettyStatuteWithDisplay :: DisplayVerbMap -> Act Active -> String
+prettyStatuteWithDisplay displayMap act =
+  "A legislative act was recognized as a statute: " ++ stripTrailingPeriod (prettyActWithDisplay displayMap act)
 
 prettyEvent :: LegalEvent -> String
 prettyEvent event =
@@ -200,6 +270,14 @@ basePredicate obj =
     ServiceSubtype (Performance Nothing) -> "perform " ++ objectReference obj
     ServiceSubtype (Omission (Just inner)) -> "interfere with " ++ objectReference inner
     ServiceSubtype (Omission Nothing) -> "perform " ++ objectReference obj
+
+demandPhraseWithDisplay :: DisplayVerbMap -> Object -> String
+demandPhraseWithDisplay (DisplayVerbMap m) obj =
+  let base = baseVerbForObject obj
+      surface = M.lookup (oName obj, base) m
+  in case surface of
+    Just v -> v ++ " of " ++ objectReference obj
+    Nothing -> demandPhrase obj
 
 demandPhrase :: Object -> String
 demandPhrase obj =

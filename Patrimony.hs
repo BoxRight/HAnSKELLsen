@@ -16,6 +16,9 @@ data PatrimonyGen
   | Liability String
   | Capability String
   | Owned Object
+  | Collateral String
+  | Certification String
+  | ApprovedContractor String
   deriving (Eq, Ord, Show)
 
 --------------------------------------------------

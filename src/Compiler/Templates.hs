@@ -322,6 +322,12 @@ substituteStandingFact bindings standingFact =
       AssetFactAst (substituteText bindings assetName)
     LiabilityFactAst liabilityName ->
       LiabilityFactAst (substituteText bindings liabilityName)
+    CollateralFactAst collateralName ->
+      CollateralFactAst (substituteText bindings collateralName)
+    CertificationFactAst certificationName ->
+      CertificationFactAst (substituteText bindings certificationName)
+    ApprovedContractorFactAst contractorName ->
+      ApprovedContractorFactAst (substituteText bindings contractorName)
 
 substituteCondition :: TemplateBindings -> ConditionAst -> ConditionAst
 substituteCondition bindings condition =
@@ -330,6 +336,10 @@ substituteCondition bindings condition =
       InstitutionalConditionAst (substituteStandingFact bindings standingFact)
     ActionConditionAst action ->
       ActionConditionAst (substituteAction bindings action)
+    EventConditionAst event ->
+      EventConditionAst (substituteLegalEvent bindings event)
+    ConditionConjunctionAst conditions ->
+      ConditionConjunctionAst (map (substituteCondition bindings) conditions)
 
 substituteRule :: TemplateBindings -> RuleAst -> RuleAst
 substituteRule bindings ruleAst =
@@ -337,6 +347,8 @@ substituteRule bindings ruleAst =
     { ruleNameAst = substituteText bindings (ruleNameAst ruleAst)
     , ruleConditionAst = substituteCondition bindings (ruleConditionAst ruleAst)
     , ruleConsequentAst = substituteModality bindings (ruleConsequentAst ruleAst)
+    , ruleValidFromAst = ruleValidFromAst ruleAst
+    , ruleValidToAst = ruleValidToAst ruleAst
     }
 
 substituteClause :: TemplateBindings -> ClauseAst -> ClauseAst
@@ -350,6 +362,18 @@ substituteClause bindings clause =
       ClauseRule (substituteRule bindings ruleAst)
     ClauseStandingFact standingFact ->
       ClauseStandingFact (substituteStandingFact bindings standingFact)
+    ClauseOverride overrideAst ->
+      ClauseOverride
+        ( OverrideClauseAst
+            (substituteModality bindings (overrideTargetAst overrideAst))
+            (substituteCondition bindings (overrideConditionAst overrideAst))
+        )
+    ClauseSuspend suspendAst ->
+      ClauseSuspend
+        ( SuspendClauseAst
+            (substituteModality bindings (suspendTargetAst suspendAst))
+            (substituteCondition bindings (suspendConditionAst suspendAst))
+        )
 
 substituteArticle :: TemplateBindings -> ArticleAst -> ArticleAst
 substituteArticle bindings article =

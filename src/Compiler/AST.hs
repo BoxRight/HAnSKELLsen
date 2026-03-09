@@ -120,17 +120,42 @@ data StandingFactAst
   | LiabilityFactAst
       { factLiabilityName :: String
       }
+  | CollateralFactAst
+      { factCollateralName :: String
+      }
+  | CertificationFactAst
+      { factCertificationName :: String
+      }
+  | ApprovedContractorFactAst
+      { factContractorName :: String
+      }
   deriving (Eq, Show)
 
 data ConditionAst
   = InstitutionalConditionAst StandingFactAst
   | ActionConditionAst ActionPhraseAst
+  | EventConditionAst LegalEventAst
+  | ConditionConjunctionAst [ConditionAst]
   deriving (Eq, Show)
 
 data RuleAst = RuleAst
   { ruleNameAst :: String
   , ruleConditionAst :: ConditionAst
   , ruleConsequentAst :: ModalityAst
+  , ruleValidFromAst :: Maybe Day
+  , ruleValidToAst :: Maybe Day
+  }
+  deriving (Eq, Show)
+
+data OverrideClauseAst = OverrideClauseAst
+  { overrideTargetAst :: ModalityAst
+  , overrideConditionAst :: ConditionAst
+  }
+  deriving (Eq, Show)
+
+data SuspendClauseAst = SuspendClauseAst
+  { suspendTargetAst :: ModalityAst
+  , suspendConditionAst :: ConditionAst
   }
   deriving (Eq, Show)
 
@@ -139,6 +164,8 @@ data ClauseAst
   | ClauseProcedure ProcedureAst
   | ClauseRule RuleAst
   | ClauseStandingFact StandingFactAst
+  | ClauseOverride OverrideClauseAst
+  | ClauseSuspend SuspendClauseAst
   deriving (Eq, Show)
 
 data ArticleAst = ArticleAst

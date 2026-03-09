@@ -10,7 +10,8 @@ module Pretty.PrettyTrace
 import Capability (prettyCapability)
 import LegalOntology (oName)
 import NormativeGenerators
-import Pretty.PrettyNorm (prettyIndexedGen)
+import Compiler.Compiler (DisplayVerbMap)
+import Pretty.PrettyNorm (prettyIndexedGen, prettyIndexedGenWithDisplay)
 import Runtime.Provenance
 import qualified Patrimony as P
 
@@ -47,43 +48,43 @@ prettyScenarioSeed seed =
     ++ ", scenario facts became visible: "
     ++ seedText seed
 
-prettyRuleFire :: RuleFire -> String
-prettyRuleFire firing =
+prettyRuleFire :: DisplayVerbMap -> RuleFire -> String
+prettyRuleFire displayMap firing =
   ruleOriginLabel (ruleOrigin firing)
     ++ " fired on "
     ++ show (witnessDay firing)
     ++ " because "
-    ++ witnessLabel (witnessFacts firing)
+    ++ witnessLabel displayMap (witnessFacts firing)
     ++ actionText
-    ++ renderConsequent (consequent firing)
+    ++ renderConsequentWithDisplay displayMap (consequent firing)
     ++ "."
   where
     actionText
       | insertedNew firing = ", introducing "
       | otherwise = ", confirming existing "
 
-prettyDerivationStep :: DerivationStep -> String
-prettyDerivationStep step =
+prettyDerivationStep :: DisplayVerbMap -> DerivationStep -> String
+prettyDerivationStep displayMap step =
   case step of
     SeedStep seed -> prettyScenarioSeed seed
-    RuleStep firing -> prettyRuleFire firing
+    RuleStep firing -> prettyRuleFire displayMap firing
 
-prettyComplianceSummary :: ComplianceSummary -> [String]
-prettyComplianceSummary summary =
+prettyComplianceSummary :: DisplayVerbMap -> ComplianceSummary -> [String]
+prettyComplianceSummary displayMap summary =
   [ "Verdict: " ++ verdictLabel (complianceVerdict summary)
   , "Violations: " ++ show (length (violatedNorms summary))
   , "Fulfillments: " ++ show (length (fulfilledNorms summary))
   , "Enforceable claims: " ++ show (length (enforceableNorms summary))
   , "Pending obligations: " ++ show (length (pendingObligations summary))
   , "Active prohibitions: " ++ show (length (activeProhibitions summary))
-  ] ++ violationSummaryLines summary
+  ] ++ violationSummaryLines displayMap summary
 
-violationSummaryLines :: ComplianceSummary -> [String]
-violationSummaryLines summary =
+violationSummaryLines :: DisplayVerbMap -> ComplianceSummary -> [String]
+violationSummaryLines displayMap summary =
   case violatedNorms summary of
     [] -> []
     violations ->
-      [ "Violation: " ++ renderConsequent violation
+      [ "Violation: " ++ renderConsequentWithDisplay displayMap violation
       | violation <- violations
       ]
 
@@ -93,20 +94,24 @@ ruleOriginLabel origin =
     DslRule name -> "Rule `" ++ name ++ "`"
     BuiltInRule name -> "Built-in rule `" ++ name ++ "`"
 
-witnessLabel :: [FactRef] -> String
-witnessLabel [] = "no recorded witness facts were preserved"
-witnessLabel facts =
-  joinWith "; " (map factRefLabel facts)
+witnessLabel :: DisplayVerbMap -> [FactRef] -> String
+witnessLabel _ [] = "no recorded witness facts were preserved"
+witnessLabel displayMap facts =
+  joinWith "; " (map (factRefLabel displayMap) facts)
 
-factRefLabel :: FactRef -> String
-factRefLabel factRef =
+factRefLabel :: DisplayVerbMap -> FactRef -> String
+factRefLabel displayMap factRef =
   case factRef of
-    NormFact indexed -> renderConsequent indexed
+    NormFact indexed -> renderConsequentWithDisplay displayMap indexed
     PatrFact patr -> patrimonyLabel patr
 
 renderConsequent :: IndexedGen -> String
 renderConsequent indexed =
   prettyIndexedGen indexed
+
+renderConsequentWithDisplay :: DisplayVerbMap -> IndexedGen -> String
+renderConsequentWithDisplay displayMap indexed =
+  prettyIndexedGenWithDisplay displayMap indexed
 
 verdictLabel :: Verdict -> String
 verdictLabel verdict =
@@ -124,5 +129,8 @@ patrimonyLabel patrimonyFact =
   case patrimonyFact of
     P.Asset assetName -> "asset " ++ assetName
     P.Liability liabilityName -> "liability " ++ liabilityName
+    P.Collateral collateralName -> "collateral " ++ collateralName
+    P.Certification certificationName -> "certification " ++ certificationName
+    P.ApprovedContractor contractorName -> "approved contractor " ++ contractorName
     P.Capability capabilityName -> "authority " ++ capabilityName ++ " is present"
     P.Owned obj -> "ownership of " ++ oName obj

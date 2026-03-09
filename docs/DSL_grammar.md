@@ -26,6 +26,8 @@ article <Number> [Optional Heading]
     fact authority <private|legislative|judicial|administrative|constitutional> is present.
     fact asset <Name> is present.
     fact liability <Name> is present.
+    override <modality> by <condition>.
+    suspend <modality> by <condition>.
     obligation <Party> must <verb> <Object> to <Party>.
     claim <Party> may demand <verb> of <Object> from <Party>.
     prohibition <Party> must not <verb> <Object> to <Party>.
@@ -38,6 +40,13 @@ article <Number> [Optional Heading]
     rule <Name>
         If <Party> owns <Object>
         then <Party> may demand <verb> of <Object> from <Party>.
+    rule <Name>
+        If <Condition> and <Condition> [and <Condition> ...]
+        then <consequence>.
+        [valid from <YYYY-MM-DD> [to <YYYY-MM-DD>].]
+    rule <Name>
+        If event <Text> [or natural event <Text>]
+        then <consequence>.
 
 scenario <Name>:
     at <YYYY-MM-DD>
@@ -45,6 +54,8 @@ scenario <Name>:
         counteract <Party> fails to <verb> <Object> to <Party>.
         assert <Party> owns <Object>.
         assert authority <private|legislative|judicial|administrative|constitutional> is present.
+        assert event <Text>.
+        assert natural event <Text>.
         event <Text>
         natural event <Text>
 
@@ -176,6 +187,9 @@ Institutional fact forms include:
 - `authority legislative is present.`
 - `asset RentLedger is present.`
 - `liability RentArrears is present.`
+- `collateral <Name> is present.`
+- `certification <Name> is present.`
+- `approved contractor <Name> is present.`
 
 ## Design Boundary
 

@@ -11,6 +11,7 @@ module Compiler.Scenario
 import Compiler.AST
 import Compiler.Compiler
 import Compiler.SymbolTable
+import Control.Monad (foldM)
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
 import Data.Time.Calendar (Day)
@@ -138,6 +139,26 @@ compileScenarioCondition
   -> Either [Diagnostic] ScenarioDelta
 compileScenarioCondition meta symbols day conditionAst =
   case conditionAst of
+    ConditionConjunctionAst conditions ->
+      foldM
+        (\acc cond ->
+          fmap (mergeScenarioDelta acc) (compileScenarioCondition meta symbols day cond)
+        )
+        emptyScenarioDelta
+        conditions
+    EventConditionAst eventAst ->
+      let fact =
+            indexedGen (lawAuthorityAst meta) day $
+              GEvent $
+                case eventAst of
+                  HumanEventAst desc -> HumanAct desc
+                  NaturalEventAst desc -> NaturalFact desc
+      in pure $
+          ScenarioDelta
+            { deltaNormFacts = S.singleton fact
+            , deltaPatrFacts = P.emptyPatrimony
+            , deltaDescriptions = [renderEventLabel eventAst]
+            }
     InstitutionalConditionAst _ -> do
       resolvedCondition <- resolveCondition symbols conditionAst
       case resolvedCondition of
@@ -172,6 +193,27 @@ compileScenarioCondition meta symbols day conditionAst =
               { deltaNormFacts = emptyNorm
               , deltaPatrFacts = S.singleton (P.Liability liabilityName)
               , deltaDescriptions = ["Assertion: liability " ++ liabilityName ++ " is present"]
+              }
+        ResolvedCollateralCondition collateralName ->
+          pure $
+            ScenarioDelta
+              { deltaNormFacts = emptyNorm
+              , deltaPatrFacts = S.singleton (P.Collateral collateralName)
+              , deltaDescriptions = ["Assertion: collateral " ++ collateralName ++ " is present"]
+              }
+        ResolvedCertificationCondition certificationName ->
+          pure $
+            ScenarioDelta
+              { deltaNormFacts = emptyNorm
+              , deltaPatrFacts = S.singleton (P.Certification certificationName)
+              , deltaDescriptions = ["Assertion: certification " ++ certificationName ++ " is present"]
+              }
+        ResolvedApprovedContractorCondition contractorName ->
+          pure $
+            ScenarioDelta
+              { deltaNormFacts = emptyNorm
+              , deltaPatrFacts = S.singleton (P.ApprovedContractor contractorName)
+              , deltaDescriptions = ["Assertion: approved contractor " ++ contractorName ++ " is present"]
               }
         ResolvedActionCondition _ ->
           Left [Diagnostic "scenario" "unexpected action condition in institutional assertion"]

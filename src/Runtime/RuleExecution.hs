@@ -87,8 +87,30 @@ conditionWitness condition st =
       in if S.member fact (patrState st)
             then Just (ConditionWitness epochDate [PatrFact fact])
             else Nothing
+    ResolvedCollateralCondition collateralName ->
+      let fact = P.Collateral collateralName
+      in if S.member fact (patrState st)
+            then Just (ConditionWitness epochDate [PatrFact fact])
+            else Nothing
+    ResolvedCertificationCondition certificationName ->
+      let fact = P.Certification certificationName
+      in if S.member fact (patrState st)
+            then Just (ConditionWitness epochDate [PatrFact fact])
+            else Nothing
+    ResolvedApprovedContractorCondition contractorName ->
+      let fact = P.ApprovedContractor contractorName
+      in if S.member fact (patrState st)
+            then Just (ConditionWitness epochDate [PatrFact fact])
+            else Nothing
     ResolvedActionCondition act ->
       matchingResolvedActDay act (normState st)
+    ResolvedEventCondition event ->
+      matchingEventDay event (normState st)
+    ResolvedConjunction subConditions -> do
+      witnesses <- traverse (\c -> conditionWitness c st) subConditions
+      let combined = foldr1 laterWitness witnesses
+          allFacts = concatMap witnessSupportingFacts witnesses
+      pure (ConditionWitness (witnessAt combined) allFacts)
 
 adjustConsequentTime :: Day -> IndexedGen -> IndexedGen
 adjustConsequentTime witnessDay indexed =
@@ -119,6 +141,23 @@ matchingPassiveActDay act norm =
     ] of
     [] -> Nothing
     witnesses -> Just (maximumWitness witnesses)
+
+matchingEventDay :: LegalEvent -> Norm -> Maybe ConditionWitness
+matchingEventDay event norm =
+  case
+    [ ConditionWitness t [NormFact fact]
+    | fact@(IndexedGen _ t (GEvent visibleEvent)) <- S.toList norm
+    , eventMatches event visibleEvent
+    ] of
+    [] -> Nothing
+    witnesses -> Just (maximumWitness witnesses)
+
+eventMatches :: LegalEvent -> LegalEvent -> Bool
+eventMatches expected visible =
+  case (expected, visible) of
+    (HumanAct e, HumanAct v) -> e == v
+    (NaturalFact e, NaturalFact v) -> e == v
+    _ -> False
 
 activeActsMatch :: Act Active -> Act r -> Bool
 activeActsMatch expected visible =

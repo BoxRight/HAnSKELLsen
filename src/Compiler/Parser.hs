@@ -8,7 +8,7 @@ import Compiler.AST
 import Capability (parseCapability)
 import Control.Monad (void)
 import Data.Char (isAlphaNum, isSpace, toLower)
-import Data.List (dropWhileEnd)
+import Data.List (dropWhileEnd, isInfixOf)
 import Data.Time.Calendar (Day, fromGregorianValid)
 import Data.Void (Void)
 import NormativeGenerators (CapabilityIndex)
@@ -350,6 +350,8 @@ parseArticleClause = do
   choice
     [ try parseProcedureClause
     , try parseRuleClause
+    , try parseOverrideClause
+    , try parseSuspendClause
     , try parseFactClause
     , try parseObligationClause
     , try parseClaimClause
@@ -388,6 +390,46 @@ parsePrivilegeClause = do
   body <- trim <$> restOfLine
   modality <- either fail pure (parsePrivilegeSentence body)
   pure (ClauseModality modality)
+
+parseOverrideClause :: Parser ClauseAst
+parseOverrideClause = do
+  _ <- chunk "override"
+  hspace1
+  targetLine <- trim <$> restOfLine
+  (target, condLine) <-
+    case splitOnOverrideBy targetLine of
+      Nothing -> fail ("expected `override <modality> by <condition>` in `" ++ targetLine ++ "`")
+      Just (t, c) -> pure (t, c)
+  targetMod <- either fail pure (parseModalityForOverride target)
+  condition <- either fail pure (parseConditionSentence condLine)
+  pure (ClauseOverride (OverrideClauseAst targetMod condition))
+
+parseSuspendClause :: Parser ClauseAst
+parseSuspendClause = do
+  _ <- chunk "suspend"
+  hspace1
+  targetLine <- trim <$> restOfLine
+  (target, condLine) <-
+    case splitOnOverrideBy targetLine of
+      Nothing -> fail ("expected `suspend <modality> by <condition>` in `" ++ targetLine ++ "`")
+      Just (t, c) -> pure (t, c)
+  targetMod <- either fail pure (parseModalityForOverride target)
+  condition <- either fail pure (parseConditionSentence condLine)
+  pure (ClauseSuspend (SuspendClauseAst targetMod condition))
+
+splitOnOverrideBy :: String -> Maybe (String, String)
+splitOnOverrideBy s =
+  case splitInfix " by " s of
+    Nothing -> Nothing
+    Just (before, after) -> Just (trim before, trim after)
+
+parseModalityForOverride :: String -> Either String ModalityAst
+parseModalityForOverride raw
+  | tokenizedContains ["may", "demand"] raw = parseClaimSentence raw
+  | tokenizedContains ["may"] raw = parsePrivilegeSentence raw
+  | tokenizedContains ["must", "not"] raw = parseProhibitionSentence raw
+  | tokenizedContains ["must"] raw = parseObligationSentence raw
+  | otherwise = Left ("unsupported modality for override/suspend `" ++ raw ++ "`")
 
 parseFactClause :: Parser ClauseAst
 parseFactClause = do
@@ -433,15 +475,40 @@ parseRuleClause = do
   _ <- string' "then"
   hspace1
   consequenceLine <- trim <$> restOfLine
+  validityLines <- many (try (indent 8 *> parseValidityLine))
   condition <- either fail pure (parseConditionSentence conditionLine)
   consequence <- either fail pure (parseConsequentSentence consequenceLine)
+  (validFrom, validTo) <- either fail pure (parseValidityLines validityLines)
   pure $
     ClauseRule $
       RuleAst
         { ruleNameAst = ruleName
         , ruleConditionAst = condition
         , ruleConsequentAst = consequence
+        , ruleValidFromAst = validFrom
+        , ruleValidToAst = validTo
         }
+  where
+    parseValidityLine :: Parser String
+    parseValidityLine = do
+      _ <- chunk "valid"
+      hspace1
+      trim <$> restOfLine
+    parseValidityLines :: [String] -> Either String (Maybe Day, Maybe Day)
+    parseValidityLines [] = Right (Nothing, Nothing)
+    parseValidityLines (line : _) =
+      case words (map toLower line) of
+        "from" : rest ->
+          case break (== "to") rest of
+            (fromParts, []) ->
+              case parseDay (unwords fromParts) of
+                Just d -> Right (Just d, Nothing)
+                Nothing -> Left ("invalid validity date in `" ++ line ++ "`")
+            (fromParts, _ : toParts) ->
+              case (parseDay (unwords fromParts), parseDay (unwords toParts)) of
+                (Just d1, Just d2) -> Right (Just d1, Just d2)
+                _ -> Left ("invalid validity dates in `" ++ line ++ "`")
+        _ -> Left ("expected `valid from <date>` or `valid from <date> to <date>` in `" ++ line ++ "`")
 
 parseNamedLine :: String -> Parser String
 parseNamedLine name = do
@@ -497,10 +564,61 @@ parseConsequentSentence raw
 
 parseConditionSentence :: String -> Either String ConditionAst
 parseConditionSentence raw =
+  case splitConditionConjunction raw of
+    [single] -> parseSingleCondition single
+    parts -> do
+      conditions <- mapM parseSingleCondition parts
+      Right (ConditionConjunctionAst conditions)
+
+parseSingleCondition :: String -> Either String ConditionAst
+parseSingleCondition raw =
   case parseInstitutionalFactSentence raw of
     Right factAst -> Right (InstitutionalConditionAst factAst)
     Left _ ->
-      ActionConditionAst <$> parseActionSentence raw
+      case parseEventCondition raw of
+        Right eventAst -> Right (EventConditionAst eventAst)
+        Left _ ->
+          ActionConditionAst <$> parseActionSentence raw
+
+parseEventCondition :: String -> Either String LegalEventAst
+parseEventCondition raw =
+  case words (stripSentence raw) of
+    "event" : rest ->
+      Right (HumanEventAst (unwords rest))
+    "natural" : "event" : rest ->
+      Right (NaturalEventAst (unwords rest))
+    _ -> Left ("not an event condition: " ++ raw)
+
+splitConditionConjunction :: String -> [String]
+splitConditionConjunction raw =
+  splitOnConjunction " and " (stripSentence raw)
+
+splitOnConjunction :: String -> String -> [String]
+splitOnConjunction _ [] = []
+splitOnConjunction sep s
+  | sep `isInfixOf` s =
+      let (before, rest) = breakOnFirst sep s
+          after = drop (length sep) rest
+      in trim before : splitOnConjunction sep after
+  | otherwise = [trim s | not (null (trim s))]
+
+breakOnFirst :: String -> String -> (String, String)
+breakOnFirst sep s =
+  case splitInfix sep s of
+    Nothing -> (s, [])
+    Just (before, after) -> (before, after)
+
+splitInfix :: Eq a => [a] -> [a] -> Maybe ([a], [a])
+splitInfix [] _ = Just ([], [])
+splitInfix _ [] = Nothing
+splitInfix needle haystack =
+  findAt 0 haystack
+  where
+    findAt i s
+      | length s < length needle = Nothing
+      | take (length needle) s == needle =
+          Just (take i haystack, drop (i + length needle) haystack)
+      | otherwise = findAt (i + 1) (tail s)
 
 parseActionSentence :: String -> Either String ActionPhraseAst
 parseActionSentence raw =
@@ -806,8 +924,21 @@ parseInstitutionalFactSentence raw =
       Right (AssetFactAst assetName)
     ["liability", liabilityName, "is", "present"] ->
       Right (LiabilityFactAst liabilityName)
+    ["collateral", collateralName, "is", "present"] ->
+      Right (CollateralFactAst collateralName)
+    ["certification", certificationName, "is", "present"] ->
+      Right (CertificationFactAst certificationName)
+    "approved" : "contractor" : rest ->
+      case splitAtEndOfContractor rest of
+        (contractorName, ["is", "present"]) -> Right (ApprovedContractorFactAst contractorName)
+        _ -> Left ("unsupported institutional fact `" ++ raw ++ "`")
     _ ->
       Left ("unsupported institutional fact `" ++ raw ++ "`")
+
+splitAtEndOfContractor :: [String] -> (String, [String])
+splitAtEndOfContractor ws =
+  case break (== "is") ws of
+    (nameParts, rest) -> (unwords nameParts, rest)
 
 isPrefixedBy :: String -> String -> Bool
 isPrefixedBy prefix raw =

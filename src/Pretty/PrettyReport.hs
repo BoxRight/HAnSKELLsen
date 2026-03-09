@@ -8,12 +8,13 @@ import Compiler.AST (lawAuthorityAst, lawEnactedAst, lawNameAst)
 import Compiler.Compiler
 import Compiler.Scenario
 import Data.Char (toLower)
-import Data.List (sortOn)
+import Data.List (intercalate, sortOn)
 import qualified Data.Set as S
 import Data.Time.Calendar (Day)
-import LegalOntology (Object, oName, pName)
+import LegalOntology (LegalEvent(..), Object, oName, pName)
 import Logic (SystemState(..))
 import NormativeGenerators
+import Compiler.Compiler (DisplayVerbMap)
 import Pretty.PrettyNorm
 import Pretty.PrettyTrace
 import Runtime.Audit
@@ -42,7 +43,7 @@ generateReport compiled initialState finalState =
 
     sourceSection =
       "Source norms:"
-        : formatBulletList (map (renderNormBody . prettyIndexedGen) initialFacts)
+        : formatBulletList (map (renderNormBody . prettyIndexedGenWithDisplay (compiledDisplayVerbMap compiled)) initialFacts)
 
     procedureSection
       | null (compiledProcedures compiled) = []
@@ -58,7 +59,7 @@ generateReport compiled initialState finalState =
           [ ""
           , "Compiled rules:"
           ]
-            ++ formatBulletList (map prettyRuleSpec (compiledRules compiled))
+            ++ formatBulletList (map (prettyRuleSpec (compiledDisplayVerbMap compiled)) (compiledRules compiled))
 
     derivedSection
       | null derivedFacts =
@@ -70,13 +71,13 @@ generateReport compiled initialState finalState =
           [ ""
           , "Derived norms:"
           ]
-            ++ concatMap prettyDerivedFact derivedFacts
+            ++ concatMap (prettyDerivedFact (compiledDisplayVerbMap compiled)) derivedFacts
 
     finalStateSection =
       [ ""
       , "Active normative state:"
       ]
-        ++ formatBulletList (map (renderNormBody . prettyIndexedGen) finalFacts)
+        ++ formatBulletList (map (renderNormBody . prettyIndexedGenWithDisplay (compiledDisplayVerbMap compiled)) finalFacts)
 
     noteSection =
       [ ""
@@ -119,7 +120,7 @@ generateAuditReport compiled auditResult =
 
     sourceSection =
       "Seed norms:"
-        : formatBulletList (map (renderNormBody . prettyIndexedGen) seedFacts)
+        : formatBulletList (map (renderNormBody . prettyIndexedGenWithDisplay (compiledDisplayVerbMap compiled)) seedFacts)
 
     procedureSection
       | null (compiledProcedures compiled) = []
@@ -135,7 +136,7 @@ generateAuditReport compiled auditResult =
           [ ""
           , "Executable DSL rules:"
           ]
-            ++ formatBulletList (map prettyRuleSpec (compiledRules compiled))
+            ++ formatBulletList (map (prettyRuleSpec (compiledDisplayVerbMap compiled)) (compiledRules compiled))
 
     scenarioSection
       | null (auditScenarioSeeds auditResult) =
@@ -159,7 +160,7 @@ generateAuditReport compiled auditResult =
           [ ""
           , "Rule firing trace:"
           ]
-            ++ formatBulletList (map prettyRuleFire (auditRuleFirings auditResult))
+            ++ formatBulletList (map (prettyRuleFire (compiledDisplayVerbMap compiled)) (auditRuleFirings auditResult))
 
     temporalTraceSection
       | null filteredTrace =
@@ -171,7 +172,7 @@ generateAuditReport compiled auditResult =
           [ ""
           , "Temporal derivation trace:"
           ]
-            ++ concatMap prettyTraceDay filteredTrace
+            ++ concatMap (prettyTraceDay (compiledDisplayVerbMap compiled)) filteredTrace
 
     derivedSection
       | null derivedFacts =
@@ -183,13 +184,13 @@ generateAuditReport compiled auditResult =
           [ ""
           , "Derived norms:"
           ]
-            ++ concatMap prettyDerivedFact derivedFacts
+            ++ concatMap (prettyDerivedFact (compiledDisplayVerbMap compiled)) derivedFacts
 
     complianceSection =
       [ ""
       , "Compliance summary:"
       ]
-        ++ formatBulletList (prettyComplianceSummary (auditComplianceSummary auditResult))
+        ++ formatBulletList (prettyComplianceSummary (compiledDisplayVerbMap compiled) (auditComplianceSummary auditResult))
 
     classificationSection
       | null (classifications (auditComplianceSummary auditResult)) =
@@ -207,7 +208,7 @@ generateAuditReport compiled auditResult =
       [ ""
       , "Active normative state:"
       ]
-        ++ groupedFinalState finalFacts
+        ++ groupedFinalState (compiledDisplayVerbMap compiled) finalFacts
 
     noteSection =
       [ ""
@@ -224,13 +225,13 @@ prettyProcedure :: ProcedureIR -> String
 prettyProcedure procedure =
   procedureIrName procedure ++ ": " ++ joinBranches (map prettyAct (procedureIrBranches procedure))
 
-prettyRuleSpec :: RuleSpec -> String
-prettyRuleSpec ruleSpec =
+prettyRuleSpec :: DisplayVerbMap -> RuleSpec -> String
+prettyRuleSpec displayMap ruleSpec =
   ruleSpecName ruleSpec
     ++ ": If "
     ++ prettyCondition (ruleSpecCondition ruleSpec)
     ++ ", then "
-    ++ renderNormBody (prettyIndexedGen (ruleSpecConsequent ruleSpec))
+    ++ renderNormBody (prettyIndexedGenWithDisplay displayMap (ruleSpecConsequent ruleSpec))
 
 prettyCondition :: ResolvedCondition -> String
 prettyCondition condition =
@@ -243,18 +244,28 @@ prettyCondition condition =
       "asset " ++ assetName ++ " is present"
     ResolvedLiabilityCondition liabilityName ->
       "liability " ++ liabilityName ++ " is present"
+    ResolvedCollateralCondition collateralName ->
+      "collateral " ++ collateralName ++ " is present"
+    ResolvedCertificationCondition certificationName ->
+      "certification " ++ certificationName ++ " is present"
+    ResolvedApprovedContractorCondition contractorName ->
+      "approved contractor " ++ contractorName ++ " is present"
     ResolvedActionCondition act ->
       prettyResolvedAct act
+    ResolvedEventCondition event ->
+      prettyLegalEvent event
+    ResolvedConjunction subConditions ->
+      intercalate " and " (map prettyCondition subConditions)
 
-prettyDerivedFact :: IndexedGen -> [String]
-prettyDerivedFact indexed =
+prettyDerivedFact :: DisplayVerbMap -> IndexedGen -> [String]
+prettyDerivedFact displayMap indexed =
   [ "- " ++ heading
   , renderNormBody body
   , "Reason:"
   , explainIndexedGen indexed
   ]
   where
-    rendered = prettyIndexedGen indexed
+    rendered = prettyIndexedGenWithDisplay displayMap indexed
     (heading, body) =
       case lines rendered of
         [] -> ("Derived norm", "")
@@ -270,11 +281,9 @@ prettyTimelineEntry (day, delta) =
   , renderNormBody (unlines (deltaDescriptions delta))
   ]
 
-prettyTraceDay :: (Day, [DerivationStep]) -> [String]
-prettyTraceDay (day, steps) =
-  ("- " ++ show day) : map prettyTraceLine steps
-  where
-    prettyTraceLine step = prettyDerivationStep step
+prettyTraceDay :: DisplayVerbMap -> (Day, [DerivationStep]) -> [String]
+prettyTraceDay displayMap (day, steps) =
+  ("- " ++ show day) : map (prettyDerivationStep displayMap) steps
 
 firstCauseSteps :: (Day, [DerivationStep]) -> (Day, [DerivationStep])
 firstCauseSteps (day, steps) =
@@ -297,8 +306,8 @@ prettyClassification classification =
     ++ "; fiber: "
     ++ classificationFiber classification
 
-groupedFinalState :: [IndexedGen] -> [String]
-groupedFinalState facts =
+groupedFinalState :: DisplayVerbMap -> [IndexedGen] -> [String]
+groupedFinalState displayMap facts =
   concatMap renderGroup groups
   where
     groups =
@@ -317,7 +326,7 @@ groupedFinalState facts =
     renderGroup (_, []) = []
     renderGroup (title, groupedFacts) =
       ("- " ++ title ++ ":")
-        : map (renderNormBody . prettyIndexedGen) groupedFacts
+        : map (renderNormBody . prettyIndexedGenWithDisplay displayMap) groupedFacts
 
 isClaim :: IndexedGen -> Bool
 isClaim indexed =
@@ -410,6 +419,12 @@ objectLabel obj =
 lowercaseHead :: String -> String
 lowercaseHead [] = []
 lowercaseHead (x : xs) = toLower x : xs
+
+prettyLegalEvent :: LegalEvent -> String
+prettyLegalEvent event =
+  case event of
+    HumanAct desc -> "event " ++ desc
+    NaturalFact desc -> "natural event " ++ desc
 
 prettyResolvedAct :: ResolvedAct -> String
 prettyResolvedAct resolvedAct =
