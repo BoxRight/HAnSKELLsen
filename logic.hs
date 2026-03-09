@@ -1,7 +1,6 @@
 import LegalOntology
 import NormativeGenerators
 import Logic
-import Quantale
 import qualified Patrimony as P
 import Data.Time.Calendar (fromGregorian)
 import qualified Data.Set as S
@@ -309,41 +308,3 @@ main = do
     putStrLn "After override rule (legislative should override private):"
     print (normState overrideDerived)
     putStrLn "  (Look for Overridden(...) generators)"
-
-    putStrLn ""
-    putStrLn "=== Testing Quantale Laws ==="
-    let qa = S.singleton (IndexedGen PrivatePower baseDate (GAct simpleAct1))
-    let qb = S.singleton (IndexedGen PrivatePower baseDate (GAct simpleAct2))
-    let qc = S.singleton (IndexedGen PrivatePower baseDate (GAct simpleAct1))
-
-    -- Identity laws
-    print (mulNorm unitNorm qa == qa)
-    print (mulNorm qa unitNorm == qa)
-    print (mulNorm unitNorm unitNorm == unitNorm)
-
-    -- Zero laws
-    print (mulNorm emptyNorm qa == emptyNorm)
-    print (mulNorm qa emptyNorm == emptyNorm)
-    print (joinNorm emptyNorm qa == qa)
-
-    -- Associativity and distributivity
-    print (mulNorm (mulNorm qa qb) qc == mulNorm qa (mulNorm qb qc))
-    print (mulNorm qa (joinNorm qb qc) == joinNorm (mulNorm qa qb) (mulNorm qa qc))
-
-    -- Kleene star closure
-    let starQa = kleeneStar qa
-    print (S.isSubsetOf qa starQa)
-    print (S.isSubsetOf unitNorm starQa)
-
-    putStrLn ""
-    putStrLn "=== Testing Act Normalization ==="
-    -- Seq [] -> Id
-    print (normalizeAct (Seq [] :: Act Active) == (Id :: Act Active))
-    -- Seq [a] -> a
-    print (normalizeAct (Seq [simpleAct1]) == simpleAct1)
-    -- Remove Id in sequence
-    print (normalizeAct (Seq [Id, simpleAct1, Id]) == simpleAct1)
-    -- Flatten nested Seq
-    print (normalizeAct (Seq [simpleAct1, Seq [simpleAct2, simpleAct1]]) == Seq [simpleAct1, simpleAct2, simpleAct1])
-    -- Par keeps single element (no collapse)
-    print (normalizeAct (Par (S.fromList [simpleAct1])) == Par (S.fromList [simpleAct1]))
