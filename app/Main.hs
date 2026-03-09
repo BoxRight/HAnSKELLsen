@@ -6,18 +6,29 @@ import Compiler.Imports
 import Compiler.Parser
 import Compiler.Scenario
 import Compiler.Templates
+import Data.ByteString.Lazy (ByteString, hPut)
+import Data.ByteString.Lazy.Char8 (unpack)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Time.Calendar (Day, fromGregorianValid)
 import Pretty.PrettyReport (generateAuditReport)
 import Runtime.Audit
+import Runtime.AuditJson
+import Runtime.DerivationGraph
 import System.Environment (getArgs)
+import System.IO (stdout)
 import System.Exit (die)
 import Text.Megaparsec (errorBundlePretty)
 import qualified Data.Map.Strict as M
 
 defaultInputPath :: FilePath
 defaultInputPath = "lawlib/instantiations/composed_lease_regime.dsl"
+
+data OutputFormat = FormatText | FormatJson
+  deriving (Eq, Show)
+
+data GraphFormat = GraphJson | GraphDot | GraphMermaid
+  deriving (Eq, Show)
 
 main :: IO ()
 main = do
@@ -46,19 +57,64 @@ main = do
                     case compileScenarios lawModule of
                       Left diagnostics ->
                         die (unlines (map show diagnostics))
-                      Right scenarios -> do
-                        auditDay <-
-                          either die pure (resolveAuditDay compiled scenarios options)
-                        case runAudit compiled scenarios (cliScenarioName options) auditDay of
-                          Left err ->
-                            die err
-                          Right auditResult ->
-                            putStrLn (generateAuditReport compiled auditResult)
+                      Right scenarios ->
+                        runAuditOrReplay compiled scenarios options
+
+runAuditOrReplay :: CompiledLawModule -> [CompiledScenario] -> CliOptions -> IO ()
+runAuditOrReplay compiled scenarios options
+  | cliReplay options =
+      case cliScenarioName options of
+        Nothing -> die "--replay requires --scenario"
+        Just scenarioName ->
+          case runAuditReplay compiled scenarios scenarioName of
+            Left err -> die err
+            Right replay ->
+              outputReplay compiled options replay
+  | otherwise = do
+      auditDay <- either die pure (resolveAuditDay compiled scenarios options)
+      case runAudit compiled scenarios (cliScenarioName options) auditDay of
+        Left err -> die err
+        Right auditResult -> outputAudit compiled options auditResult
+
+outputAudit :: CompiledLawModule -> CliOptions -> AuditResult -> IO ()
+outputAudit compiled options result = do
+  case cliGraphFormat options of
+    Just fmt -> putStrLn (outputGraph fmt result)
+    Nothing ->
+      case cliOutputFormat options of
+        FormatJson -> putLbs (auditResultToJson compiled result)
+        FormatText -> putStrLn (generateAuditReport compiled result)
+
+outputReplay :: CompiledLawModule -> CliOptions -> [(Day, AuditResult)] -> IO ()
+outputReplay compiled options replay = do
+  case cliOutputFormat options of
+    FormatJson -> putLbs (auditReplayToJson compiled replay)
+    FormatText ->
+      mapM_
+        (\(day, result) -> do
+          putStrLn ("=== " ++ show day ++ " ===")
+          putStrLn (generateAuditReport compiled result)
+          putStrLn "")
+        replay
+
+outputGraph :: GraphFormat -> AuditResult -> String
+outputGraph fmt result =
+  let graph = buildDerivationGraph result
+  in case fmt of
+    GraphJson -> unpack (exportDerivationGraphJson graph)
+    GraphDot -> exportDerivationGraphDot graph
+    GraphMermaid -> exportDerivationGraphMermaid graph
+
+putLbs :: ByteString -> IO ()
+putLbs = hPut stdout
 
 data CliOptions = CliOptions
   { cliInputPath :: Maybe FilePath
   , cliScenarioName :: Maybe String
   , cliAuditAt :: Maybe Day
+  , cliReplay :: Bool
+  , cliOutputFormat :: OutputFormat
+  , cliGraphFormat :: Maybe GraphFormat
   }
 
 emptyCliOptions :: CliOptions
@@ -67,6 +123,9 @@ emptyCliOptions =
     { cliInputPath = Nothing
     , cliScenarioName = Nothing
     , cliAuditAt = Nothing
+    , cliReplay = False
+    , cliOutputFormat = FormatText
+    , cliGraphFormat = Nothing
     }
 
 parseCliOptions :: [String] -> Either String CliOptions
@@ -79,6 +138,24 @@ parseCliOptions =
     go options ("--audit-at" : rawDate : rest) = do
       parsedDay <- maybe (Left ("invalid audit date `" ++ rawDate ++ "`")) Right (parseIsoDay rawDate)
       go options { cliAuditAt = Just parsedDay } rest
+    go options ("--replay" : rest) =
+      go options { cliReplay = True } rest
+    go options ("--format" : "json" : rest) =
+      go options { cliOutputFormat = FormatJson } rest
+    go options ("--format" : other : rest) =
+      Left ("unknown format `" ++ other ++ "` (use json)")
+    go options ("--format" : []) =
+      Left "--format requires a value (use json)"
+    go options ("--graph" : "json" : rest) =
+      go options { cliGraphFormat = Just GraphJson } rest
+    go options ("--graph" : "dot" : rest) =
+      go options { cliGraphFormat = Just GraphDot } rest
+    go options ("--graph" : "mermaid" : rest) =
+      go options { cliGraphFormat = Just GraphMermaid } rest
+    go options ("--graph" : other : rest) =
+      Left ("unknown graph format `" ++ other ++ "` (use json, dot, or mermaid)")
+    go options ("--graph" : []) =
+      Left "--graph requires a value (use json, dot, or mermaid)"
     go options (arg : rest)
       | "--" `isPrefixOf` arg =
           Left ("unknown option `" ++ arg ++ "`")

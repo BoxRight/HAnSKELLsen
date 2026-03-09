@@ -4,6 +4,7 @@ module Runtime.Audit
   ( AuditResult(..)
   , lookupScenario
   , runAudit
+  , runAuditReplay
   , runAuditFixpoint
   ) where
 
@@ -72,6 +73,21 @@ runAudit compiled scenarios selectedScenarioName selectedAuditDate = do
       , auditSeedState = seedState
       , auditFinalState = finalState
       }
+
+-- | Run audit at each date in the scenario timeline. Requires a scenario name.
+-- Returns a list of (Day, AuditResult) in chronological order.
+runAuditReplay
+  :: CompiledLawModule
+  -> [CompiledScenario]
+  -> String
+  -> Either String [(Day, AuditResult)]
+runAuditReplay compiled scenarios scenarioName = do
+  scenario <- maybe (Left ("unknown scenario `" ++ scenarioName ++ "`")) Right
+    (lookupScenario scenarios scenarioName)
+  let timelineDates = map fst (M.toAscList (compiledScenarioTimeline scenario))
+  traverse
+    (\day -> fmap ((,) day) (runAudit compiled scenarios (Just scenarioName) day))
+    timelineDates
 
 lookupScenario :: [CompiledScenario] -> String -> Maybe CompiledScenario
 lookupScenario scenarios wantedName =
