@@ -8,9 +8,11 @@ module Pretty.PrettyTrace
   ) where
 
 import Capability (prettyCapability)
+import LegalOntology (oName)
 import NormativeGenerators
 import Pretty.PrettyNorm (prettyIndexedGen)
 import Runtime.Provenance
+import qualified Patrimony as P
 
 explainIndexedGen :: IndexedGen -> String
 explainIndexedGen indexed =
@@ -100,7 +102,7 @@ factRefLabel :: FactRef -> String
 factRefLabel factRef =
   case factRef of
     NormFact indexed -> renderConsequent indexed
-    PatrFact patr -> "patrimony fact " ++ show patr
+    PatrFact patr -> patrimonyLabel patr
 
 renderConsequent :: IndexedGen -> String
 renderConsequent indexed =
@@ -116,3 +118,11 @@ joinWith :: String -> [String] -> String
 joinWith _ [] = ""
 joinWith _ [value] = value
 joinWith separator (value : rest) = value ++ separator ++ joinWith separator rest
+
+patrimonyLabel :: P.PatrimonyGen -> String
+patrimonyLabel patrimonyFact =
+  case patrimonyFact of
+    P.Asset assetName -> "asset " ++ assetName
+    P.Liability liabilityName -> "liability " ++ liabilityName
+    P.Capability capabilityName -> "authority " ++ capabilityName ++ " is present"
+    P.Owned obj -> "ownership of " ++ oName obj

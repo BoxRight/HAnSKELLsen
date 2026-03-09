@@ -11,16 +11,17 @@ vocabulary
     verb disclose: disclose
 
 parties
-    Seller: Alice Corp
-    Buyer: Bob
+    Seller: Alice Corp, legal person, exercise capacity, address 123 Business St
+    Buyer: Bob, natural person, enjoy capacity, address 456 Home Ave
 
 objects
-    Goods: movable
-    Price: money
-    BankCredit: money
-    Secrets: service
+    Goods: movable, start 2025-01-01, due 2025-03-01
+    Price: money, due 2025-03-01
+    BankCredit: money, due 2025-03-01
+    Secrets: service, omission, of Goods, start 2025-01-01, end 2025-12-31
 
 article 1 Formation
+    fact authority legislative is present.
     obligation Seller must deliver Goods to Buyer.
     obligation Buyer must pay Price to Seller.
 
@@ -30,6 +31,7 @@ article 2 Claims
 
 article 3 Prohibitions
     prohibition Seller must not disclose Secrets to Buyer.
+    privilege Seller may refrain from disclose Secrets to Buyer.
 
 article 4 Procedures
     procedure SalePerformance:
@@ -41,6 +43,7 @@ article 4 Procedures
         Buyer transfers BankCredit to Seller.
 
 article 5 Derivation
+    fact Buyer owns Goods.
     rule PaymentClaimAfterOwnership
         If Buyer owns Goods
         then Seller may demand pay of Price from Buyer.

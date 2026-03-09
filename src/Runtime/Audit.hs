@@ -48,7 +48,9 @@ runAudit compiled scenarios selectedScenarioName selectedAuditDate = do
       seedState =
         SystemState
           { normState = S.fromList (compiledFacts compiled) `S.union` deltaNormFacts visibleFacts
-          , patrState = P.emptyPatrimony `S.union` deltaPatrFacts visibleFacts
+          , patrState =
+              compiledInstitutionalFacts compiled
+                `S.union` deltaPatrFacts visibleFacts
           }
       scenarioSeeds = buildScenarioSeeds visibleTimeline
       (finalState, rawRuleFirings) =

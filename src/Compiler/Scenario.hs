@@ -13,7 +13,7 @@ import Compiler.Compiler
 import Compiler.SymbolTable
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
-import Data.Time.Calendar (Day, fromGregorian)
+import Data.Time.Calendar (Day)
 import LegalOntology
 import NormativeGenerators
 import qualified Patrimony as P
@@ -91,8 +91,12 @@ compileScenarioAssertion meta symbols day assertion =
   case assertion of
     ScenarioAct actionAst -> do
       resolved <- resolveAction symbols actionAst
-      let act = resolvedActionToAct resolved
-          fact = indexedGen (lawAuthorityAst meta) day (GAct act)
+      let fact =
+            case actionPolarity actionAst of
+              PositiveActionAst ->
+                indexedGen (lawAuthorityAst meta) day (GAct (resolvedActionToAct resolved))
+              NegativeActionAst ->
+                indexedGen (lawAuthorityAst meta) day (GAct (resolvedActionToCounterAct resolved))
       pure $
         ScenarioDelta
           { deltaNormFacts = S.singleton fact
@@ -100,7 +104,7 @@ compileScenarioAssertion meta symbols day assertion =
           , deltaDescriptions = ["Act: " ++ renderActionPhrase actionAst]
           }
     ScenarioCounterAct actionAst -> do
-      resolved <- resolveCounterAction symbols actionAst
+      resolved <- resolveAction symbols actionAst
       let fact = indexedGen (lawAuthorityAst meta) day (GAct (resolvedActionToCounterAct resolved))
       pure $
         ScenarioDelta
@@ -110,13 +114,18 @@ compileScenarioAssertion meta symbols day assertion =
           }
     ScenarioCondition conditionAst ->
       compileScenarioCondition meta symbols day conditionAst
-    ScenarioEvent description ->
-      let fact = indexedGen (lawAuthorityAst meta) day (GEvent (HumanAct description))
+    ScenarioEvent eventAst ->
+      let fact =
+            indexedGen (lawAuthorityAst meta) day $
+              GEvent $
+                case eventAst of
+                  HumanEventAst description -> HumanAct description
+                  NaturalEventAst description -> NaturalFact description
       in pure $
           ScenarioDelta
             { deltaNormFacts = S.singleton fact
             , deltaPatrFacts = P.emptyPatrimony
-            , deltaDescriptions = ["event " ++ description]
+            , deltaDescriptions = [renderEventLabel eventAst]
             }
 
 compileScenarioCondition
@@ -127,63 +136,57 @@ compileScenarioCondition
   -> Either [Diagnostic] ScenarioDelta
 compileScenarioCondition meta symbols day conditionAst =
   case conditionAst of
-    OwnershipConditionAst partyName objectName -> do
+    InstitutionalConditionAst _ -> do
       resolvedCondition <- resolveCondition symbols conditionAst
       case resolvedCondition of
-        ResolvedOwnershipCondition _ obj ->
+        ResolvedOwnershipCondition owner obj ->
           pure $
             ScenarioDelta
-              { deltaNormFacts = S.singleton (indexedGen (lawAuthorityAst meta) day (GEvent (HumanAct ("ownership:" ++ partyName ++ ":" ++ objectName))))
+              { deltaNormFacts =
+                  S.singleton
+                    (indexedGen (lawAuthorityAst meta) day (GEvent (HumanAct ("ownership:" ++ pName owner ++ ":" ++ oName obj))))
               , deltaPatrFacts = S.singleton (P.Owned obj)
-              , deltaDescriptions = ["Assertion: " ++ partyName ++ " owns " ++ objectName]
+              , deltaDescriptions = ["Assertion: " ++ pName owner ++ " owns " ++ oName obj]
               }
-        _ ->
-          Left [Diagnostic "scenario" "unexpected non-ownership condition during ownership compilation"]
+        ResolvedCapabilityCondition capability ->
+          pure $
+            ScenarioDelta
+              { deltaNormFacts =
+                  S.singleton
+                    (indexedGen (lawAuthorityAst meta) day (GEvent (HumanAct ("capability:" ++ show capability))))
+              , deltaPatrFacts = S.singleton (P.Capability (capabilityToken capability))
+              , deltaDescriptions = ["Assertion: authority " ++ show capability ++ " is present"]
+              }
+        ResolvedAssetCondition assetName ->
+          pure $
+            ScenarioDelta
+              { deltaNormFacts = emptyNorm
+              , deltaPatrFacts = S.singleton (P.Asset assetName)
+              , deltaDescriptions = ["Assertion: asset " ++ assetName ++ " is present"]
+              }
+        ResolvedLiabilityCondition liabilityName ->
+          pure $
+            ScenarioDelta
+              { deltaNormFacts = emptyNorm
+              , deltaPatrFacts = S.singleton (P.Liability liabilityName)
+              , deltaDescriptions = ["Assertion: liability " ++ liabilityName ++ " is present"]
+              }
+        ResolvedActionCondition _ ->
+          Left [Diagnostic "scenario" "unexpected action condition in institutional assertion"]
     ActionConditionAst actionAst -> do
       resolved <- resolveAction symbols actionAst
-      let fact = indexedGen (lawAuthorityAst meta) day (GAct (resolvedActionToAct resolved))
+      let fact =
+            case actionPolarity actionAst of
+              PositiveActionAst ->
+                indexedGen (lawAuthorityAst meta) day (GAct (resolvedActionToAct resolved))
+              NegativeActionAst ->
+                indexedGen (lawAuthorityAst meta) day (GAct (resolvedActionToCounterAct resolved))
       pure $
         ScenarioDelta
           { deltaNormFacts = S.singleton fact
           , deltaPatrFacts = P.emptyPatrimony
           , deltaDescriptions = ["Assertion: " ++ renderActionPhrase actionAst]
           }
-
-resolveCounterAction :: SymbolTable -> ActionPhraseAst -> Either [Diagnostic] ResolvedAction
-resolveCounterAction symbols actionAst = do
-  actor <- liftDiag (resolvePartyDecl symbols (actionActorName actionAst))
-  objectDecl <- liftDiag (resolveObjectDecl symbols (actionObjectName actionAst))
-  targetName <-
-    case actionTargetName actionAst of
-      Just name -> Right name
-      Nothing ->
-        Left
-          [ Diagnostic "scenario"
-              ("missing target for counteract by `" ++ actionActorName actionAst ++ "`")
-          ]
-  target <- liftDiag (resolvePartyDecl symbols targetName)
-  pure $
-    ResolvedAction
-      { resolvedActionVerb = actionVerb actionAst
-      , resolvedActionActor = Person Physical (partyDisplayName actor) Exercise ""
-      , resolvedActionObject = Object (objectSubtypeFromKind (objectKind objectDecl)) (actionObjectName actionAst) epoch epoch Nothing
-      , resolvedActionTarget = Person Physical (partyDisplayName target) Exercise ""
-      }
-  where
-    epoch = fromGregorian 1 1 1
-
-liftDiag :: Either Diagnostic a -> Either [Diagnostic] a
-liftDiag =
-  either (Left . (: [])) Right
-
-objectSubtypeFromKind :: ObjectKindAst -> OSubtype
-objectSubtypeFromKind kind =
-  case kind of
-    MovableKind -> ThingSubtype Movable
-    NonMovableKind -> ThingSubtype NonMovable
-    ExpendableKind -> ThingSubtype Expendable
-    MoneyKind -> ThingSubtype Expendable
-    ServiceKind -> ServiceSubtype (Performance Nothing)
 
 mergeScenarioDelta :: ScenarioDelta -> ScenarioDelta -> ScenarioDelta
 mergeScenarioDelta left right =
@@ -205,6 +208,24 @@ renderActionPhrase actionAst =
 renderCounterActionPhrase :: ActionPhraseAst -> String
 renderCounterActionPhrase actionAst =
   actionActorName actionAst
-    ++ " fails "
+    ++ " fails to "
+    ++ actionVerb actionAst
+    ++ " "
     ++ actionObjectName actionAst
     ++ maybe "" (" to " ++) (actionTargetName actionAst)
+
+renderEventLabel :: LegalEventAst -> String
+renderEventLabel eventAst =
+  case eventAst of
+    HumanEventAst description -> "Event: " ++ description
+    NaturalEventAst description -> "Natural event: " ++ description
+
+capabilityToken :: CapabilityIndex -> String
+capabilityToken capability =
+  case capability of
+    BaseAuthority -> "baseauthority"
+    PrivatePower -> "private"
+    LegislativePower -> "legislative"
+    JudicialPower -> "judicial"
+    AdministrativePower -> "administrative"
+    ConstitutionalPower -> "constitutional"

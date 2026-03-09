@@ -72,28 +72,75 @@ conditionWitness condition st =
       if S.member (P.Owned obj) (patrState st)
         then Just (ConditionWitness epochDate [PatrFact (P.Owned obj)])
         else Nothing
+    ResolvedCapabilityCondition capability ->
+      let fact = P.Capability (capabilityToken capability)
+      in if S.member fact (patrState st)
+            then Just (ConditionWitness epochDate [PatrFact fact])
+            else Nothing
+    ResolvedAssetCondition assetName ->
+      let fact = P.Asset assetName
+      in if S.member fact (patrState st)
+            then Just (ConditionWitness epochDate [PatrFact fact])
+            else Nothing
+    ResolvedLiabilityCondition liabilityName ->
+      let fact = P.Liability liabilityName
+      in if S.member fact (patrState st)
+            then Just (ConditionWitness epochDate [PatrFact fact])
+            else Nothing
     ResolvedActionCondition act ->
-      matchingActDay act (normState st)
+      matchingResolvedActDay act (normState st)
 
 adjustConsequentTime :: Day -> IndexedGen -> IndexedGen
 adjustConsequentTime witnessDay indexed =
   indexed { time = max (time indexed) witnessDay }
 
-matchingActDay :: Act Active -> Norm -> Maybe ConditionWitness
-matchingActDay act norm =
+matchingResolvedActDay :: ResolvedAct -> Norm -> Maybe ConditionWitness
+matchingResolvedActDay resolvedAct norm =
+  case resolvedAct of
+    ResolvedActiveAct act -> matchingActiveActDay act norm
+    ResolvedPassiveAct act -> matchingPassiveActDay act norm
+
+matchingActiveActDay :: Act Active -> Norm -> Maybe ConditionWitness
+matchingActiveActDay act norm =
   case
     [ ConditionWitness t [NormFact fact]
     | fact@(IndexedGen _ t (GAct visibleAct)) <- S.toList norm
-    , actsMatch act visibleAct
+    , activeActsMatch act visibleAct
     ] of
     [] -> Nothing
     witnesses -> Just (maximumWitness witnesses)
 
-actsMatch :: Act Active -> Act r -> Bool
-actsMatch expected visible =
+matchingPassiveActDay :: Act Passive -> Norm -> Maybe ConditionWitness
+matchingPassiveActDay act norm =
+  case
+    [ ConditionWitness t [NormFact fact]
+    | fact@(IndexedGen _ t (GAct visibleAct)) <- S.toList norm
+    , passiveActsMatch act visibleAct
+    ] of
+    [] -> Nothing
+    witnesses -> Just (maximumWitness witnesses)
+
+activeActsMatch :: Act Active -> Act r -> Bool
+activeActsMatch expected visible =
   case visible of
     Simple _ _ _ -> show expected == show visible
     _ -> False
+
+passiveActsMatch :: Act Passive -> Act r -> Bool
+passiveActsMatch expected visible =
+  case visible of
+    Counter _ _ _ -> show expected == show visible
+    _ -> False
+
+capabilityToken :: CapabilityIndex -> String
+capabilityToken capability =
+  case capability of
+    BaseAuthority -> "baseauthority"
+    PrivatePower -> "private"
+    LegislativePower -> "legislative"
+    JudicialPower -> "judicial"
+    AdministrativePower -> "administrative"
+    ConstitutionalPower -> "constitutional"
 
 maximumWitness :: [ConditionWitness] -> ConditionWitness
 maximumWitness [] = ConditionWitness epochDate []

@@ -7,6 +7,18 @@ Formal legal reasoning prototype in Haskell with:
 - cross-domain inference over normative + patrimony state (`Logic.hs`)
 - quantale operations over norms (`Quantale.hs`)
 
+## DSL Boundary
+
+The lawyer-facing DSL is intended to expose legal and institutional concepts directly, not the engine's algebraic machinery.
+
+The intended split is:
+
+- legal layer: actors, objects, acts, obligations, claims, prohibitions, privileges, procedures, rules, and scenarios
+- institutional layer: authority, ownership, temporal validity, regime metadata, and audit context
+- algebraic layer: norm lattice operations, quantale structure, and fixpoint machinery
+
+The first two layers should be readable in the DSL. The third should remain mostly implicit and only appear through legal constructs such as procedures, alternatives, and audits.
+
 ## Two Closure Operators
 
 The system intentionally exposes **two different, orthogonal closures** over the same lattice `Norm = Set IndexedGen`:

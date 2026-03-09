@@ -3,6 +3,16 @@ module Compiler.AST where
 import Data.Time.Calendar (Day)
 import NormativeGenerators (CapabilityIndex)
 
+data PartySubtypeAst
+  = NaturalPartyAst
+  | LegalPartyAst
+  deriving (Eq, Ord, Show)
+
+data PartyCapacityAst
+  = EnjoyCapacityAst
+  | ExerciseCapacityAst
+  deriving (Eq, Ord, Show)
+
 data LawMetaAst = LawMetaAst
   { lawNameAst :: String
   , lawAuthorityAst :: CapabilityIndex
@@ -13,6 +23,9 @@ data LawMetaAst = LawMetaAst
 data PartyDecl = PartyDecl
   { partyAlias :: String
   , partyDisplayName :: String
+  , partySubtypeAst :: PartySubtypeAst
+  , partyCapacityAst :: PartyCapacityAst
+  , partyAddressAst :: Maybe String
   }
   deriving (Eq, Show)
 
@@ -24,9 +37,19 @@ data ObjectKindAst
   | ServiceKind
   deriving (Eq, Ord, Show)
 
+data ServiceModeAst
+  = PerformanceServiceAst
+  | OmissionServiceAst
+  deriving (Eq, Ord, Show)
+
 data ObjectDecl = ObjectDecl
   { objectAlias :: String
   , objectKind :: ObjectKindAst
+  , objectServiceMode :: Maybe ServiceModeAst
+  , objectRelatedObject :: Maybe String
+  , objectStartAst :: Maybe Day
+  , objectDueAst :: Maybe Day
+  , objectEndAst :: Maybe Day
   }
   deriving (Eq, Show)
 
@@ -41,11 +64,17 @@ data VocabularyDecl
       }
   deriving (Eq, Show)
 
+data ActionPolarityAst
+  = PositiveActionAst
+  | NegativeActionAst
+  deriving (Eq, Ord, Show)
+
 data ActionPhraseAst = ActionPhraseAst
   { actionActorName :: String
   , actionVerb :: String
   , actionObjectName :: String
   , actionTargetName :: Maybe String
+  , actionPolarity :: ActionPolarityAst
   }
   deriving (Eq, Show)
 
@@ -70,11 +99,24 @@ data ProcedureAst = ProcedureAst
   }
   deriving (Eq, Show)
 
-data ConditionAst
-  = OwnershipConditionAst
-      { conditionPartyName :: String
-      , conditionObjectName :: String
+data StandingFactAst
+  = OwnershipFactAst
+      { factPartyName :: String
+      , factObjectName :: String
       }
+  | CapabilityFactAst
+      { factCapability :: CapabilityIndex
+      }
+  | AssetFactAst
+      { factAssetName :: String
+      }
+  | LiabilityFactAst
+      { factLiabilityName :: String
+      }
+  deriving (Eq, Show)
+
+data ConditionAst
+  = InstitutionalConditionAst StandingFactAst
   | ActionConditionAst ActionPhraseAst
   deriving (Eq, Show)
 
@@ -89,6 +131,7 @@ data ClauseAst
   = ClauseModality ModalityAst
   | ClauseProcedure ProcedureAst
   | ClauseRule RuleAst
+  | ClauseStandingFact StandingFactAst
   deriving (Eq, Show)
 
 data ArticleAst = ArticleAst
@@ -98,11 +141,16 @@ data ArticleAst = ArticleAst
   }
   deriving (Eq, Show)
 
+data LegalEventAst
+  = HumanEventAst String
+  | NaturalEventAst String
+  deriving (Eq, Show)
+
 data ScenarioAssertionAst
   = ScenarioAct ActionPhraseAst
   | ScenarioCounterAct ActionPhraseAst
   | ScenarioCondition ConditionAst
-  | ScenarioEvent String
+  | ScenarioEvent LegalEventAst
   deriving (Eq, Show)
 
 data ScenarioEntryAst = ScenarioEntryAst

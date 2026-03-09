@@ -120,8 +120,23 @@ parsePartyLine = do
   alias <- identifier
   _ <- char ':'
   hspace
-  displayName <- trim <$> restOfLine
-  pure (PartyDecl alias displayName)
+  rawBody <- trim <$> restOfLine
+  let fields = splitCommaFields rawBody
+      displayName =
+        case fields of
+          [] -> rawBody
+          nameField : _ -> nameField
+  subtype <- either fail pure (parsePartySubtype fields)
+  capacity <- either fail pure (parsePartyCapacity fields)
+  pure
+    ( PartyDecl
+        { partyAlias = alias
+        , partyDisplayName = displayName
+        , partySubtypeAst = subtype
+        , partyCapacityAst = capacity
+        , partyAddressAst = parsePartyAddress fields
+        }
+    )
 
 parseObjectsSection :: Parser TopBlock
 parseObjectsSection = do
@@ -136,10 +151,32 @@ parseObjectLine = do
   alias <- identifier
   _ <- char ':'
   hspace
-  rawKind <- trim <$> restOfLine
-  case parseObjectKind rawKind of
-    Just kind -> pure (ObjectDecl alias kind)
-    Nothing -> fail ("unknown object kind `" ++ rawKind ++ "`")
+  rawBody <- trim <$> restOfLine
+  let fields = splitCommaFields rawBody
+      primaryField =
+        case fields of
+          [] -> rawBody
+          kindField : _ -> kindField
+  kind <-
+    case parseObjectKind primaryField of
+      Just parsedKind -> pure parsedKind
+      Nothing -> fail ("unknown object kind `" ++ primaryField ++ "`")
+  serviceMode <- either fail pure (parseServiceMode kind fields)
+  let relatedObject = parseObjectRelation fields
+  startDay <- either fail pure (parseOptionalDatedField "start" fields)
+  dueDay <- either fail pure (parseOptionalDatedField "due" fields)
+  endDay <- either fail pure (parseOptionalDatedField "end" fields)
+  pure
+    ( ObjectDecl
+        { objectAlias = alias
+        , objectKind = kind
+        , objectServiceMode = serviceMode
+        , objectRelatedObject = relatedObject
+        , objectStartAst = startDay
+        , objectDueAst = dueDay
+        , objectEndAst = endDay
+        }
+    )
 
 parseArticle :: Parser TopBlock
 parseArticle = do
@@ -194,7 +231,8 @@ parseScenarioAssertion :: Parser ScenarioAssertionAst
 parseScenarioAssertion = do
   indent 8
   choice
-    [ try parseScenarioCounterAct
+    [ try parseScenarioNaturalEvent
+    , try parseScenarioCounterAct
     , try parseScenarioAct
     , try parseScenarioCondition
     , try parseScenarioEvent
@@ -225,7 +263,13 @@ parseScenarioEvent :: Parser ScenarioAssertionAst
 parseScenarioEvent = do
   _ <- chunk "event"
   hspace1
-  ScenarioEvent . trim <$> restOfLine
+  ScenarioEvent . HumanEventAst . trim <$> restOfLine
+
+parseScenarioNaturalEvent :: Parser ScenarioAssertionAst
+parseScenarioNaturalEvent = do
+  _ <- chunk "natural event"
+  hspace1
+  ScenarioEvent . NaturalEventAst . trim <$> restOfLine
 
 parseArticleClause :: Parser ClauseAst
 parseArticleClause = do
@@ -233,9 +277,11 @@ parseArticleClause = do
   choice
     [ try parseProcedureClause
     , try parseRuleClause
+    , try parseFactClause
     , try parseObligationClause
     , try parseClaimClause
     , try parseProhibitionClause
+    , try parsePrivilegeClause
     ]
 
 parseObligationClause :: Parser ClauseAst
@@ -261,6 +307,22 @@ parseProhibitionClause = do
   body <- trim <$> restOfLine
   modality <- either fail pure (parseProhibitionSentence body)
   pure (ClauseModality modality)
+
+parsePrivilegeClause :: Parser ClauseAst
+parsePrivilegeClause = do
+  _ <- chunk "privilege"
+  hspace1
+  body <- trim <$> restOfLine
+  modality <- either fail pure (parsePrivilegeSentence body)
+  pure (ClauseModality modality)
+
+parseFactClause :: Parser ClauseAst
+parseFactClause = do
+  _ <- chunk "fact"
+  hspace1
+  body <- trim <$> restOfLine
+  factAst <- either fail pure (parseInstitutionalFactSentence body)
+  pure (ClauseStandingFact factAst)
 
 parseProcedureClause :: Parser ClauseAst
 parseProcedureClause = do
@@ -327,7 +389,9 @@ parseObjectKind raw =
 
 parseObligationSentence :: String -> Either String ModalityAst
 parseObligationSentence raw =
-  ObligationAst <$> parseActionSentence raw
+  if tokenizedContains ["must"] raw
+    then ObligationAst <$> parseActionSentence raw
+    else Left ("expected obligation form with `must` in `" ++ raw ++ "`")
 
 parseClaimSentence :: String -> Either String ModalityAst
 parseClaimSentence raw =
@@ -336,53 +400,67 @@ parseClaimSentence raw =
 parseProhibitionSentence :: String -> Either String ModalityAst
 parseProhibitionSentence raw =
   case parseActionSentence raw of
-    Right action@(ActionPhraseAst actor verb obj target) ->
-      if tokenizedContains ["must", "not"] raw
+    Right action ->
+      if tokenizedContains ["must", "not"] raw || tokenizedContains ["must", "refrain", "from"] raw
         then Right (ProhibitionAst action)
         else
           Left
-            ("expected prohibition form with `must not` in `" ++ raw ++ "`")
+            ("expected prohibition form with `must not` or `must refrain from` in `" ++ raw ++ "`")
     Left err -> Left err
+
+parsePrivilegeSentence :: String -> Either String ModalityAst
+parsePrivilegeSentence raw =
+  if tokenizedContains ["may"] raw
+    then PrivilegeAst <$> parseActionSentence raw
+    else Left ("expected privilege form with `may` in `" ++ raw ++ "`")
 
 parseConsequentSentence :: String -> Either String ModalityAst
 parseConsequentSentence raw
   | tokenizedContains ["may", "demand"] raw = parseClaimSentence raw
+  | tokenizedContains ["may"] raw = parsePrivilegeSentence raw
   | tokenizedContains ["must", "not"] raw = parseProhibitionSentence raw
   | tokenizedContains ["must"] raw = parseObligationSentence raw
   | otherwise = Left ("unsupported consequence `" ++ raw ++ "`")
 
 parseConditionSentence :: String -> Either String ConditionAst
 parseConditionSentence raw =
-  case words (stripSentence raw) of
-    [partyName, "owns", objectName] ->
-      Right (OwnershipConditionAst partyName objectName)
-    _ ->
+  case parseInstitutionalFactSentence raw of
+    Right factAst -> Right (InstitutionalConditionAst factAst)
+    Left _ ->
       ActionConditionAst <$> parseActionSentence raw
 
 parseActionSentence :: String -> Either String ActionPhraseAst
 parseActionSentence raw =
   case words (stripSentence raw) of
+    actorName : "must" : "refrain" : "from" : verbName : objectName : rest ->
+      buildAction NegativeActionAst actorName verbName objectName rest
+    actorName : "may" : "refrain" : "from" : verbName : objectName : rest ->
+      buildAction NegativeActionAst actorName verbName objectName rest
+    actorName : "fails" : "to" : verbName : objectName : rest ->
+      buildAction NegativeActionAst actorName verbName objectName rest
+    actorName : "does" : "not" : verbName : objectName : rest ->
+      buildAction NegativeActionAst actorName verbName objectName rest
     actorName : "must" : "not" : verbName : objectName : rest ->
-      buildAction actorName verbName objectName rest
+      buildAction NegativeActionAst actorName verbName objectName rest
     actorName : "must" : verbName : objectName : rest ->
-      buildAction actorName verbName objectName rest
+      buildAction PositiveActionAst actorName verbName objectName rest
+    actorName : "may" : verbName : objectName : rest ->
+      buildAction PositiveActionAst actorName verbName objectName rest
     actorName : verbName : objectName : rest ->
-      buildAction actorName verbName objectName rest
+      buildAction PositiveActionAst actorName verbName objectName rest
     _ ->
       Left
         ("unsupported action phrase `" ++ raw ++ "`")
 
 parseCounterActionSentence :: String -> Either String ActionPhraseAst
 parseCounterActionSentence raw =
-  case words (stripSentence raw) of
-    actorName : "fails" : "to" : _verbName : objectName : rest ->
-      buildAction actorName "fails" objectName rest
-    actorName : "fails" : objectName : rest ->
-      buildAction actorName "fails" objectName rest
-    actorName : "does" : "not" : _verbName : objectName : rest ->
-      buildAction actorName "fails" objectName rest
-    _ ->
-      parseActionSentence raw
+  case parseActionSentence raw of
+    Right action
+      | actionPolarity action == NegativeActionAst -> Right action
+    Right _ ->
+      Left ("expected counter-act form in `" ++ raw ++ "`")
+    Left err ->
+      Left err
 
 parseDemandSentence :: String -> Either String ClaimPhraseAst
 parseDemandSentence raw =
@@ -407,8 +485,8 @@ parseDemandSentence raw =
       Left
         ("unsupported claim phrase `" ++ raw ++ "`")
 
-buildAction :: String -> String -> String -> [String] -> Either String ActionPhraseAst
-buildAction actorName verbName objectName rest =
+buildAction :: ActionPolarityAst -> String -> String -> String -> [String] -> Either String ActionPhraseAst
+buildAction polarity actorName verbName objectName rest =
   case rest of
     [] ->
       Right $
@@ -417,6 +495,7 @@ buildAction actorName verbName objectName rest =
           , actionVerb = verbName
           , actionObjectName = objectName
           , actionTargetName = Nothing
+          , actionPolarity = polarity
           }
     ["to", targetName] ->
       Right $
@@ -425,6 +504,7 @@ buildAction actorName verbName objectName rest =
           , actionVerb = verbName
           , actionObjectName = objectName
           , actionTargetName = Just targetName
+          , actionPolarity = polarity
           }
     _ ->
       Left
@@ -508,9 +588,113 @@ normalizeOptional maybeValue =
     Just "" -> Nothing
     other -> other
 
+splitCommaFields :: String -> [String]
+splitCommaFields raw =
+  filter (not . null) (map trim (splitOn ',' raw))
+
+parsePartySubtype :: [String] -> Either String PartySubtypeAst
+parsePartySubtype fields =
+  case [subtype | field <- drop 1 fields, subtype <- maybeToList (partySubtypeField field)] of
+    [] -> Right NaturalPartyAst
+    [subtype] -> Right subtype
+    _ -> Left "party declaration has conflicting subtype descriptors"
+
+parsePartyCapacity :: [String] -> Either String PartyCapacityAst
+parsePartyCapacity fields =
+  case [capacity | field <- drop 1 fields, capacity <- maybeToList (partyCapacityField field)] of
+    [] -> Right ExerciseCapacityAst
+    [capacity] -> Right capacity
+    _ -> Left "party declaration has conflicting capacity descriptors"
+
+parsePartyAddress :: [String] -> Maybe String
+parsePartyAddress fields =
+  case [trim (dropPrefix "address" field) | field <- drop 1 fields, isPrefixedBy "address" field] of
+    addressText : _ -> normalizeOptional (Just addressText)
+    [] -> Nothing
+
+partySubtypeField :: String -> Maybe PartySubtypeAst
+partySubtypeField raw =
+  case normalizeWord raw of
+    "naturalperson" -> Just NaturalPartyAst
+    "physicalperson" -> Just NaturalPartyAst
+    "legalperson" -> Just LegalPartyAst
+    _ -> Nothing
+
+partyCapacityField :: String -> Maybe PartyCapacityAst
+partyCapacityField raw =
+  case normalizeWord raw of
+    "enjoycapacity" -> Just EnjoyCapacityAst
+    "exercisecapacity" -> Just ExerciseCapacityAst
+    _ -> Nothing
+
+parseServiceMode :: ObjectKindAst -> [String] -> Either String (Maybe ServiceModeAst)
+parseServiceMode kind fields =
+  case kind of
+    ServiceKind ->
+      case [mode | field <- fields, mode <- maybeToList (serviceModeField field)] of
+        [] -> Right (Just PerformanceServiceAst)
+        [mode] -> Right (Just mode)
+        _ -> Left "object declaration has conflicting service descriptors"
+    _ -> Right Nothing
+
+serviceModeField :: String -> Maybe ServiceModeAst
+serviceModeField raw =
+  case normalizeWord raw of
+    "performance" -> Just PerformanceServiceAst
+    "omission" -> Just OmissionServiceAst
+    _ -> Nothing
+
+parseObjectRelation :: [String] -> Maybe String
+parseObjectRelation fields =
+  case [trim (dropPrefix "of" field) | field <- drop 1 fields, isPrefixedBy "of" field] of
+    related : _ -> normalizeOptional (Just related)
+    [] -> Nothing
+
+parseOptionalDatedField :: String -> [String] -> Either String (Maybe Day)
+parseOptionalDatedField label fields =
+  case [trim (dropPrefix label field) | field <- drop 1 fields, isPrefixedBy label field] of
+    [] -> Right Nothing
+    [rawDate] ->
+      case parseDay rawDate of
+        Just parsedDay -> Right (Just parsedDay)
+        Nothing -> Left ("invalid " ++ label ++ " date `" ++ rawDate ++ "`")
+    _ -> Left ("object declaration has conflicting `" ++ label ++ "` fields")
+
+parseInstitutionalFactSentence :: String -> Either String StandingFactAst
+parseInstitutionalFactSentence raw =
+  case words (stripSentence raw) of
+    [partyName, "owns", objectName] ->
+      Right (OwnershipFactAst partyName objectName)
+    [capabilityName, "authority", "is", "present"] ->
+      CapabilityFactAst <$> parseCapability capabilityName
+    ["authority", capabilityName, "is", "present"] ->
+      CapabilityFactAst <$> parseCapability capabilityName
+    ["asset", assetName, "is", "present"] ->
+      Right (AssetFactAst assetName)
+    ["liability", liabilityName, "is", "present"] ->
+      Right (LiabilityFactAst liabilityName)
+    _ ->
+      Left ("unsupported institutional fact `" ++ raw ++ "`")
+
+isPrefixedBy :: String -> String -> Bool
+isPrefixedBy prefix raw =
+  case words raw of
+    firstWord : _ -> normalizeWord firstWord == normalizeWord prefix
+    [] -> False
+
+dropPrefix :: String -> String -> String
+dropPrefix prefix raw =
+  trim (drop (length prefix) raw)
+
 normalizeWord :: String -> String
 normalizeWord =
   map toLower . filter (\c -> isAlphaNum c || c == '_')
+
+maybeToList :: Maybe a -> [a]
+maybeToList maybeValue =
+  case maybeValue of
+    Just value -> [value]
+    Nothing -> []
 
 tokenizedContains :: [String] -> String -> Bool
 tokenizedContains needle haystack =

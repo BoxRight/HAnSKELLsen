@@ -172,8 +172,8 @@ prettyStatute act =
 prettyEvent :: LegalEvent -> String
 prettyEvent event =
   case event of
-    NaturalFact description -> "Natural fact: " ++ description
-    HumanAct description -> "Human act: " ++ description
+    NaturalFact description -> "Natural fact: " ++ stripTrailingPeriod description
+    HumanAct description -> "Human act: " ++ stripTrailingPeriod description
 
 prettyPerson :: Person -> String
 prettyPerson = pName

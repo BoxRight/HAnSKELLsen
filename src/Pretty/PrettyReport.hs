@@ -237,8 +237,14 @@ prettyCondition condition =
   case condition of
     ResolvedOwnershipCondition party obj ->
       pName party ++ " owns " ++ objectLabel obj
+    ResolvedCapabilityCondition capability ->
+      "authority " ++ show capability ++ " is present"
+    ResolvedAssetCondition assetName ->
+      "asset " ++ assetName ++ " is present"
+    ResolvedLiabilityCondition liabilityName ->
+      "liability " ++ liabilityName ++ " is present"
     ResolvedActionCondition act ->
-      stripHeading (prettyAct act)
+      prettyResolvedAct act
 
 prettyDerivedFact :: IndexedGen -> [String]
 prettyDerivedFact indexed =
@@ -299,6 +305,9 @@ groupedFinalState facts =
       [ ("Claims", filter isClaim facts)
       , ("Obligations", filter isObligation facts)
       , ("Prohibitions", filter isProhibition facts)
+      , ("Privileges", filter isPrivilege facts)
+      , ("Statutes", filter isStatute facts)
+      , ("Superseded norms", filter isOverriddenFact facts)
       , ("Violations", filter isViolation facts)
       , ("Fulfillments", filter isFulfillment facts)
       , ("Enforceable claims", filter isEnforceable facts)
@@ -328,10 +337,28 @@ isProhibition indexed =
     GProhibition _ -> True
     _ -> False
 
+isPrivilege :: IndexedGen -> Bool
+isPrivilege indexed =
+  case gen indexed of
+    GPrivilege _ -> True
+    _ -> False
+
 isViolation :: IndexedGen -> Bool
 isViolation indexed =
   case gen indexed of
     GViolation _ -> True
+    _ -> False
+
+isStatute :: IndexedGen -> Bool
+isStatute indexed =
+  case gen indexed of
+    GStatute _ -> True
+    _ -> False
+
+isOverriddenFact :: IndexedGen -> Bool
+isOverriddenFact indexed =
+  case gen indexed of
+    Overridden _ -> True
     _ -> False
 
 isFulfillment :: IndexedGen -> Bool
@@ -383,3 +410,9 @@ objectLabel obj =
 lowercaseHead :: String -> String
 lowercaseHead [] = []
 lowercaseHead (x : xs) = toLower x : xs
+
+prettyResolvedAct :: ResolvedAct -> String
+prettyResolvedAct resolvedAct =
+  case resolvedAct of
+    ResolvedActiveAct act -> stripHeading (prettyAct act)
+    ResolvedPassiveAct act -> stripHeading (prettyAct act)

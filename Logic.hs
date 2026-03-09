@@ -285,7 +285,7 @@ patrimonyToNorm st =
                     else S.insert newGen acc
         P.Owned obj ->
           -- Ownership is also a standing condition (valid from epoch)
-          let newGen = IndexedGen PrivatePower epochDate (GEvent (HumanAct ("owns:" ++ show obj)))
+          let newGen = IndexedGen PrivatePower epochDate (GEvent (HumanAct ("owns:" ++ oName obj)))
           in if S.member newGen acc
                 then acc
                 else S.insert newGen acc

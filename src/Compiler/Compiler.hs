@@ -1,6 +1,7 @@
 module Compiler.Compiler
   ( CompiledLawModule(..)
   , ProcedureIR(..)
+  , ResolvedAct(..)
   , ResolvedAction(..)
   , ResolvedClaim(..)
   , ResolvedCondition(..)
@@ -17,13 +18,13 @@ module Compiler.Compiler
 import Compiler.AST
 import Compiler.SymbolTable
 import Data.Either (partitionEithers)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Set as S
 import Data.Time.Calendar (Day, fromGregorian)
 import LegalOntology
 import Logic (SystemState(..))
-import qualified Patrimony as P
 import NormativeGenerators
+import qualified Patrimony as P
 
 data ResolvedAction = ResolvedAction
   { resolvedActionVerb :: String
@@ -41,9 +42,17 @@ data ResolvedClaim = ResolvedClaim
   }
   deriving (Eq, Show)
 
+data ResolvedAct
+  = ResolvedActiveAct (Act Active)
+  | ResolvedPassiveAct (Act Passive)
+  deriving (Eq, Show)
+
 data ResolvedCondition
   = ResolvedOwnershipCondition Person Object
-  | ResolvedActionCondition (Act Active)
+  | ResolvedCapabilityCondition CapabilityIndex
+  | ResolvedAssetCondition String
+  | ResolvedLiabilityCondition String
+  | ResolvedActionCondition ResolvedAct
   deriving (Eq, Show)
 
 data ProcedureIR = ProcedureIR
@@ -62,10 +71,17 @@ data RuleSpec = RuleSpec
 data CompiledLawModule = CompiledLawModule
   { compiledMetadata :: LawMetaAst
   , compiledFacts :: [IndexedGen]
+  , compiledInstitutionalFacts :: P.PatrimonyState
   , compiledProcedures :: [ProcedureIR]
   , compiledRules :: [RuleSpec]
   }
   deriving (Eq, Show)
+
+data ClauseResult
+  = CompiledFact IndexedGen
+  | CompiledInstitutionalFact P.PatrimonyGen
+  | CompiledProcedure ProcedureIR
+  | CompiledRule RuleSpec
 
 compileLawModule :: LawModuleAst -> Either [Diagnostic] CompiledLawModule
 compileLawModule lawModule = do
@@ -81,6 +97,8 @@ compileLawModule lawModule = do
         CompiledLawModule
           { compiledMetadata = meta
           , compiledFacts = mapMaybe extractFact payloads
+          , compiledInstitutionalFacts =
+              S.fromList (mapMaybe extractInstitutionalFact payloads)
           , compiledProcedures = mapMaybe extractProcedure payloads
           , compiledRules = mapMaybe extractRule payloads
           }
@@ -93,17 +111,12 @@ compileInitialNorm lawModule = do
 
 compileInitialSystemState :: LawModuleAst -> Either [Diagnostic] SystemState
 compileInitialSystemState lawModule = do
-  norm <- compileInitialNorm lawModule
+  compiled <- compileLawModule lawModule
   pure $
     SystemState
-      { normState = norm
-      , patrState = P.emptyPatrimony
+      { normState = S.fromList (compiledFacts compiled)
+      , patrState = compiledInstitutionalFacts compiled
       }
-
-data ClauseResult
-  = CompiledFact IndexedGen
-  | CompiledProcedure ProcedureIR
-  | CompiledRule RuleSpec
 
 compileClause
   :: LawMetaAst
@@ -114,6 +127,8 @@ compileClause meta symbols clause =
   case clause of
     ClauseModality modality ->
       CompiledFact <$> compileModality meta symbols modality
+    ClauseStandingFact factAst ->
+      CompiledInstitutionalFact <$> compileStandingFact symbols factAst
     ClauseProcedure procedure ->
       CompiledProcedure <$> compileProcedure symbols procedure
     ClauseRule ruleAst ->
@@ -125,20 +140,26 @@ compileModality
   -> ModalityAst
   -> Either [Diagnostic] IndexedGen
 compileModality meta symbols modality =
-  indexedGen (lawAuthorityAst meta) (lawEnactedAst meta)
-    <$> case modality of
-          ObligationAst action ->
-            GObligation . Obligation . resolvedActionToAct
-              <$> resolveAction symbols action
-          ClaimAst claimAst ->
-            GClaim . Claim . resolvedClaimToAct
-              <$> resolveClaim symbols claimAst
-          ProhibitionAst action ->
-            GProhibition . Prohibition . resolvedActionToAct
-              <$> resolveAction symbols action
-          PrivilegeAst action ->
-            GPrivilege . Privilege . resolvedActionToAct
-              <$> resolveAction symbols action
+  case modality of
+    ObligationAst action -> do
+      resolved <- resolveAction symbols action
+      pure $
+        indexedGen (lawAuthorityAst meta) (lawEnactedAst meta)
+          (obligationGenerator action resolved)
+    ClaimAst claimAst ->
+      indexedGen (lawAuthorityAst meta) (lawEnactedAst meta)
+        . GClaim . Claim . resolvedClaimToAct
+        <$> resolveClaim symbols claimAst
+    ProhibitionAst action -> do
+      resolved <- resolveAction symbols action
+      pure $
+        indexedGen (lawAuthorityAst meta) (lawEnactedAst meta)
+          (prohibitionGenerator action resolved)
+    PrivilegeAst action -> do
+      resolved <- resolveAction symbols action
+      pure $
+        indexedGen (lawAuthorityAst meta) (lawEnactedAst meta)
+          (privilegeGenerator action resolved)
 
 compileProcedure
   :: SymbolTable
@@ -155,7 +176,8 @@ compileProcedure symbols procedure = do
 compileBranch :: SymbolTable -> [ActionPhraseAst] -> Either [Diagnostic] (Act Active)
 compileBranch symbols actions = do
   resolvedActions <- mapM (resolveAction symbols) actions
-  pure (normalizeAct (Seq (map resolvedActionToAct resolvedActions)))
+  activeActs <- mapM ensureActiveProcedureStep (zip actions resolvedActions)
+  pure (normalizeAct (Seq activeActs))
 
 compileRuleSpec
   :: LawMetaAst
@@ -186,11 +208,12 @@ resolveAction symbols action = do
               ("missing target for action by `" ++ actionActorName action ++ "`")
           ]
   target <- liftDiagnostic (resolvePartyDecl symbols targetName)
+  objectValue <- compileObjectDecl symbols objectDecl
   pure $
     ResolvedAction
       { resolvedActionVerb = normalizeVerbToken (actionVerb action)
       , resolvedActionActor = mkPerson actor
-      , resolvedActionObject = mkObject (objectKind objectDecl) (actionObjectName action)
+      , resolvedActionObject = objectValue
       , resolvedActionTarget = mkPerson target
       }
 
@@ -200,27 +223,45 @@ resolveClaim symbols claimAst = do
   against <- liftDiagnostic (resolvePartyDecl symbols (claimAgainstName claimAst))
   objectDecl <- liftDiagnostic (resolveObjectDecl symbols (claimObjectName claimAst))
   _ <- liftDiagnostic (resolveVerbCanonical symbols (claimVerb claimAst))
+  objectValue <- compileObjectDecl symbols objectDecl
   pure $
     ResolvedClaim
       { resolvedClaimVerb = normalizeVerbToken (claimVerb claimAst)
       , resolvedClaimHolder = mkPerson holder
       , resolvedClaimAgainst = mkPerson against
-      , resolvedClaimObject = mkObject (objectKind objectDecl) (claimObjectName claimAst)
+      , resolvedClaimObject = objectValue
       }
 
 resolveCondition :: SymbolTable -> ConditionAst -> Either [Diagnostic] ResolvedCondition
 resolveCondition symbols conditionAst =
   case conditionAst of
-    OwnershipConditionAst partyName objectName -> do
+    InstitutionalConditionAst factAst ->
+      resolveInstitutionalCondition symbols factAst
+    ActionConditionAst actionAst ->
+      ResolvedActionCondition <$> resolveActionCondition symbols actionAst
+
+resolveInstitutionalCondition
+  :: SymbolTable
+  -> StandingFactAst
+  -> Either [Diagnostic] ResolvedCondition
+resolveInstitutionalCondition symbols factAst =
+  case factAst of
+    OwnershipFactAst partyName objectName -> do
       party <- liftDiagnostic (resolvePartyDecl symbols partyName)
       objectDecl <- liftDiagnostic (resolveObjectDecl symbols objectName)
-      pure $
-        ResolvedOwnershipCondition
-          (mkPerson party)
-          (mkObject (objectKind objectDecl) objectName)
-    ActionConditionAst actionAst ->
-      ResolvedActionCondition . resolvedActionToAct
-        <$> resolveAction symbols actionAst
+      objectValue <- compileObjectDecl symbols objectDecl
+      pure (ResolvedOwnershipCondition (mkPerson party) objectValue)
+    CapabilityFactAst capability ->
+      pure (ResolvedCapabilityCondition capability)
+    AssetFactAst assetName ->
+      pure (ResolvedAssetCondition assetName)
+    LiabilityFactAst liabilityName ->
+      pure (ResolvedLiabilityCondition liabilityName)
+
+resolveActionCondition :: SymbolTable -> ActionPhraseAst -> Either [Diagnostic] ResolvedAct
+resolveActionCondition symbols actionAst = do
+  resolved <- resolveAction symbols actionAst
+  pure (resolvedActionFromPhrase actionAst resolved)
 
 resolvedActionToAct :: ResolvedAction -> Act Active
 resolvedActionToAct action =
@@ -246,35 +287,126 @@ resolvedClaimToAct claim =
       (resolvedClaimObject claim)
       (resolvedClaimHolder claim)
 
+resolvedActionFromPhrase :: ActionPhraseAst -> ResolvedAction -> ResolvedAct
+resolvedActionFromPhrase actionAst resolved =
+  case actionPolarity actionAst of
+    PositiveActionAst -> ResolvedActiveAct (resolvedActionToAct resolved)
+    NegativeActionAst -> ResolvedPassiveAct (resolvedActionToCounterAct resolved)
+
 mkPerson :: PartyDecl -> Person
 mkPerson party =
   Person
-    { pSubtype = Physical
+    { pSubtype =
+        case partySubtypeAst party of
+          NaturalPartyAst -> Physical
+          LegalPartyAst -> Legal
     , pName = partyDisplayName party
-    , pCapacity = Exercise
-    , pAddress = ""
+    , pCapacity =
+        case partyCapacityAst party of
+          EnjoyCapacityAst -> Enjoy
+          ExerciseCapacityAst -> Exercise
+    , pAddress = fromMaybe "" (partyAddressAst party)
     }
 
-mkObject :: ObjectKindAst -> String -> Object
-mkObject kind objectName =
+compileObjectDecl :: SymbolTable -> ObjectDecl -> Either [Diagnostic] Object
+compileObjectDecl symbols objectDecl = do
+  relatedObject <-
+    case objectRelatedObject objectDecl of
+      Nothing -> Right Nothing
+      Just relatedAlias
+        | normalizeSymbolKey relatedAlias == normalizeSymbolKey (objectAlias objectDecl) ->
+            Left
+              [ Diagnostic "resolution"
+                  ("object `" ++ objectAlias objectDecl ++ "` cannot relate to itself")
+              ]
+        | otherwise -> do
+            relatedDecl <- liftDiagnostic (resolveObjectDecl symbols relatedAlias)
+            Just <$> compileObjectDecl symbols relatedDecl
+  pure (mkObject objectDecl relatedObject)
+
+mkObject :: ObjectDecl -> Maybe Object -> Object
+mkObject objectDecl relatedObject =
   Object
-    { oSubtype = compileObjectSubtype kind
-    , oName = objectName
-    , oStart = epoch
-    , oDue = epoch
-    , oEnd = Nothing
+    { oSubtype = compileObjectSubtype objectDecl relatedObject
+    , oName = objectAlias objectDecl
+    , oStart = fromMaybe epoch (objectStartAst objectDecl)
+    , oDue =
+        fromMaybe
+          (fromMaybe epoch (objectStartAst objectDecl))
+          (objectDueAst objectDecl)
+    , oEnd = objectEndAst objectDecl
     }
   where
     epoch = toEpochDay
 
-compileObjectSubtype :: ObjectKindAst -> OSubtype
-compileObjectSubtype kind =
-  case kind of
+compileObjectSubtype :: ObjectDecl -> Maybe Object -> OSubtype
+compileObjectSubtype objectDecl relatedObject =
+  case objectKind objectDecl of
     MovableKind -> ThingSubtype Movable
     NonMovableKind -> ThingSubtype NonMovable
     ExpendableKind -> ThingSubtype Expendable
     MoneyKind -> ThingSubtype Expendable
-    ServiceKind -> ServiceSubtype (Performance Nothing)
+    ServiceKind ->
+      ServiceSubtype $
+        case fromMaybe PerformanceServiceAst (objectServiceMode objectDecl) of
+          PerformanceServiceAst -> Performance relatedObject
+          OmissionServiceAst -> Omission relatedObject
+
+compileStandingFact
+  :: SymbolTable
+  -> StandingFactAst
+  -> Either [Diagnostic] P.PatrimonyGen
+compileStandingFact symbols factAst =
+  case factAst of
+    OwnershipFactAst _ objectName -> do
+      objectDecl <- liftDiagnostic (resolveObjectDecl symbols objectName)
+      P.Owned <$> compileObjectDecl symbols objectDecl
+    CapabilityFactAst capability ->
+      pure (P.Capability (capabilityToken capability))
+    AssetFactAst assetName ->
+      pure (P.Asset assetName)
+    LiabilityFactAst liabilityName ->
+      pure (P.Liability liabilityName)
+
+capabilityToken :: CapabilityIndex -> String
+capabilityToken capability =
+  case capability of
+    BaseAuthority -> "baseauthority"
+    PrivatePower -> "private"
+    LegislativePower -> "legislative"
+    JudicialPower -> "judicial"
+    AdministrativePower -> "administrative"
+    ConstitutionalPower -> "constitutional"
+
+obligationGenerator :: ActionPhraseAst -> ResolvedAction -> Generator
+obligationGenerator actionAst resolved =
+  case resolvedActionFromPhrase actionAst resolved of
+    ResolvedActiveAct act -> GObligation (Obligation act)
+    ResolvedPassiveAct act -> GObligation (Obligation act)
+
+prohibitionGenerator :: ActionPhraseAst -> ResolvedAction -> Generator
+prohibitionGenerator actionAst resolved =
+  case resolvedActionFromPhrase actionAst resolved of
+    ResolvedActiveAct act -> GProhibition (Prohibition act)
+    ResolvedPassiveAct act -> GProhibition (Prohibition act)
+
+privilegeGenerator :: ActionPhraseAst -> ResolvedAction -> Generator
+privilegeGenerator actionAst resolved =
+  case resolvedActionFromPhrase actionAst resolved of
+    ResolvedActiveAct act -> GPrivilege (Privilege act)
+    ResolvedPassiveAct act -> GPrivilege (Privilege act)
+
+ensureActiveProcedureStep
+  :: (ActionPhraseAst, ResolvedAction)
+  -> Either [Diagnostic] (Act Active)
+ensureActiveProcedureStep (actionAst, resolved) =
+  case resolvedActionFromPhrase actionAst resolved of
+    ResolvedActiveAct act -> Right act
+    ResolvedPassiveAct _ ->
+      Left
+        [ Diagnostic "procedure"
+            ("procedure steps must be positive acts, but `" ++ actionVerb actionAst ++ "` was expressed as a counter-act")
+        ]
 
 toEpochDay :: Day
 toEpochDay = fromGregorian 1 1 1
@@ -287,6 +419,12 @@ extractFact :: ClauseResult -> Maybe IndexedGen
 extractFact clauseResult =
   case clauseResult of
     CompiledFact fact -> Just fact
+    _ -> Nothing
+
+extractInstitutionalFact :: ClauseResult -> Maybe P.PatrimonyGen
+extractInstitutionalFact clauseResult =
+  case clauseResult of
+    CompiledInstitutionalFact fact -> Just fact
     _ -> Nothing
 
 extractProcedure :: ClauseResult -> Maybe ProcedureIR
