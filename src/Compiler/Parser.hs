@@ -2,6 +2,7 @@ module Compiler.Parser
   ( Parser
   , parseLawFile
   , parseLawModule
+  , parseConditionSentence
   ) where
 
 import Compiler.AST
@@ -308,6 +309,7 @@ parseScenarioAssertion = do
     , try parseScenarioCounterAct
     , try parseScenarioAct
     , try parseScenarioNumericAssert
+    , try parseScenarioDateAssert
     , try parseScenarioCondition
     , try parseScenarioEvent
     ]
@@ -335,9 +337,24 @@ parseScenarioNumericAssert = do
   factName <- some (satisfy (\c -> isAlphaNum c || c == '_'))
   hspace1
   valueStr <- trim <$> restOfLine
-  case reads valueStr of
+  let valueStr' = dropWhileEnd (== '.') valueStr
+  case reads valueStr' of
     [(v, "")] -> pure (ScenarioNumericAssert factName v)
     _ -> fail ("invalid numeric value: " ++ valueStr)
+
+parseScenarioDateAssert :: Parser ScenarioAssertionAst
+parseScenarioDateAssert = do
+  _ <- chunk "assert"
+  hspace1
+  _ <- chunk "date"
+  hspace1
+  factName <- some (satisfy (\c -> isAlphaNum c || c == '_'))
+  hspace1
+  dateStr <- trim <$> restOfLine
+  let dateStr' = dropWhileEnd (== '.') dateStr
+  case parseDay dateStr' of
+    Just day -> pure (ScenarioDateAssert factName day)
+    Nothing -> fail ("invalid date: " ++ dateStr)
 
 parseScenarioCondition :: Parser ScenarioAssertionAst
 parseScenarioCondition = do
@@ -579,9 +596,9 @@ parseConsequentSentence raw
 parseConditionSentence :: String -> Either String ConditionAst
 parseConditionSentence raw =
   case splitConditionConjunction raw of
-    [single] -> parseSingleCondition single
+    [single] -> parseSingleCondition (normalizeConditionSegment single)
     parts -> do
-      conditions <- mapM parseSingleCondition parts
+      conditions <- mapM (parseSingleCondition . normalizeConditionSegment) parts
       Right (ConditionConjunctionAst conditions)
 
 parseSingleCondition :: String -> Either String ConditionAst
@@ -621,11 +638,14 @@ parseIntrinsicCondition raw =
 parseIntrinsicArg :: String -> Either String IntrinsicArgAst
 parseIntrinsicArg s =
   case reads s of
-    [(d, "")] -> Right (IntrinsicLiteral d)
+    [(d, "")] -> Right (IntrinsicNumericLiteral d)
     _ ->
-      if all (\c -> isAlphaNum c || c == '_') s
-        then Right (IntrinsicFactRef s)
-        else Left ("invalid intrinsic arg: " ++ s)
+      case parseDay s of
+        Just day -> Right (IntrinsicDateLiteral day)
+        Nothing ->
+          if all (\c -> isAlphaNum c || c == '_') s
+            then Right (IntrinsicFactRef s)
+            else Left ("invalid intrinsic arg: " ++ s)
 
 parseEventCondition :: String -> Either String LegalEventAst
 parseEventCondition raw =
@@ -636,16 +656,20 @@ parseEventCondition raw =
       Right (NaturalEventAst (unwords rest))
     _ -> Left ("not an event condition: " ++ raw)
 
+-- | Normalize a condition segment: trim, strip trailing punctuation, collapse whitespace.
+normalizeConditionSegment :: String -> String
+normalizeConditionSegment s =
+  unwords . words $ dropWhileEnd (`elem` ".;,") (trim s)
+
 splitConditionConjunction :: String -> [String]
 splitConditionConjunction raw =
-  splitOnConjunction " and " (stripSentence raw)
+  map normalizeConditionSegment (splitOnConjunction " and " (stripSentence raw))
 
 splitOnConjunction :: String -> String -> [String]
 splitOnConjunction _ [] = []
 splitOnConjunction sep s
   | sep `isInfixOf` s =
-      let (before, rest) = breakOnFirst sep s
-          after = drop (length sep) rest
+      let (before, after) = breakOnFirst sep s
       in trim before : splitOnConjunction sep after
   | otherwise = [trim s | not (null (trim s))]
 

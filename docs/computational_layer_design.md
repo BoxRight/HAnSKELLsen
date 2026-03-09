@@ -1,38 +1,48 @@
-# Computational Layer Design (Specification Only)
+# Computational Layer Design
 
-This document defines the contract for a future numeric intrinsic layer. **No implementation is planned at this stage.** The document serves as a specification for a later phase when the legal-structural DSL is mature and the benchmark clearly requires calculator-like support.
+This document defines the contract for the numeric and temporal intrinsic layer. The implementation is in [Runtime.Intrinsics](../src/Runtime/Intrinsics.hs) and is wired through the compiler and rule execution.
 
 ## Core Principle
 
-Arithmetic behaves as a **deterministic guard on rule activation**, not as part of the normative algebra. The backend remains a **monotonic fixpoint system over generators**. Arithmetic evaluates facts but never modifies the reasoning model directly.
+Arithmetic and date predicates behave as **deterministic guards on rule activation**, not as part of the normative algebra. The backend remains a **monotonic fixpoint system over generators**. Intrinsics evaluate facts but never modify the reasoning model directly.
 
-The correct approach is to treat arithmetic as **deterministic predicates used only inside rule conditions**. Arithmetic cannot introduce side effects, mutable state, or non-monotonic reasoning. The rule fires only if the predicate returns `True`.
+Intrinsics are:
+
+- **pure** — no side effects
+- **deterministic** — same inputs always yield same output
+- **used only in rule conditions** — they act as guards; the rule fires only if the predicate returns `True`
 
 ## Context
 
 [docs/renewable_energy_benchmark.md](renewable_energy_benchmark.md) identifies the remaining gap: numeric and threshold reasoning for tax credits, production levels, filing windows, and similar calculations. Rules cannot yet compare against numeric thresholds or perform date arithmetic.
 
-## Numeric Values from Facts
+## Numeric and Date Values from Facts
 
-**Numeric values must come from facts**, not from rule literals. The rule checks the value using an intrinsic predicate. This keeps arithmetic separate from normative reasoning.
+**Numeric and date values** come from scenario assertions or literals in rule conditions. The rule checks the value using an intrinsic predicate. This keeps arithmetic separate from normative reasoning.
 
 Example scenario assertions:
 
 ```text
-assert asset ProjectOutput = 12000
-assert production SolarPlant 12000
+assert numeric production 12000
+assert date filingDate 2025-04-01
 ```
 
-The rule then references the fact and applies an intrinsic predicate. The engine still derives obligations, claims, and privileges exactly the same way—it just consults numeric facts when evaluating eligibility conditions.
+The rule then references the fact and applies an intrinsic predicate (e.g. `aboveThreshold production 10000` or `withinWindow filingDate 2025-03-01 2025-04-15`). The engine derives obligations, claims, and privileges exactly the same way—it consults numeric and date facts when evaluating eligibility conditions.
+
+`DateFact` extends the patrimony state alongside `NumericFact`, allowing temporal scenario assertions to participate in rule conditions.
 
 ## DSL Syntax
 
-At the DSL level, rules can include numeric checks such as:
+At the DSL level, rules can include numeric and temporal checks such as:
 
 ```text
 rule TaxCreditEligibility
-    If SolarGrowthLtd productionAboveThreshold 10000
-    then SolarGrowthLtd may demand grant of the renewableTaxCredit from RevenueOffice.
+    If aboveThreshold production 10000
+    then Developer may demand grant of Benefit from Authority.
+
+rule FilingValid
+    If withinWindow filingDate 2025-03-01 2025-04-15
+    then Authority must grant Benefit to Developer.
 ```
 
 The actual comparison is handled by a pure intrinsic function. The DSL parses the condition; the compiler lowers it to a predicate node; the runtime evaluates the predicate during rule matching.
@@ -115,13 +125,9 @@ For implementers, the extension points are:
   - Procedure blocks
   - Scenario assertions (except possibly in a future condition form)
 
-## Deferred
+## Implementation Status
 
-- **No implementation.** This document is a specification for a future phase.
-- Implementation should begin only when:
-  - The legal-structural DSL is stable.
-  - The benchmark or a concrete use case clearly requires one or more intrinsics.
-  - The design boundary (backend as stable kernel) remains respected.
+The intrinsic layer is implemented. See [test/fixtures/intrinsic_tests.dsl](../test/fixtures/intrinsic_tests.dsl) and [TestIntrinsics.hs](../test/TestIntrinsics.hs) for examples and tests. The design boundary (backend as stable kernel) is preserved—no changes were made to Logic, Quantale, NormativeGenerators, or the fixpoint engine.
 
 ## References
 

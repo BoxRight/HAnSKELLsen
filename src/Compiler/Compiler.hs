@@ -53,6 +53,7 @@ data ResolvedAct
 data IntrinsicArg
   = ResolvedIntrinsicFactRef String
   | ResolvedIntrinsicLiteral Double
+  | ResolvedIntrinsicDateLiteral Day
   deriving (Eq, Show)
 
 data ResolvedCondition
@@ -375,7 +376,8 @@ intrinsicArgAstToArg :: IntrinsicArgAst -> IntrinsicArg
 intrinsicArgAstToArg arg =
   case arg of
     IntrinsicFactRef name -> ResolvedIntrinsicFactRef name
-    IntrinsicLiteral d -> ResolvedIntrinsicLiteral d
+    IntrinsicNumericLiteral d -> ResolvedIntrinsicLiteral d
+    IntrinsicDateLiteral day -> ResolvedIntrinsicDateLiteral day
 
 resolveInstitutionalCondition
   :: SymbolTable

@@ -59,6 +59,8 @@ scenario <Name>:
         assert collateral <Name> is present.
         assert certification <Name> is present.
         assert approved contractor <Name> is present.
+        assert numeric <Name> <value>.
+        assert date <Name> <YYYY-MM-DD>.
         assert event <Text>.
         assert natural event <Text>.
         event <Text>
@@ -174,6 +176,37 @@ Recommended rule:
 3. Put executable case assembly and audit scenarios in `instantiations/`.
 
 This keeps reusable law modules separate from runnable case files.
+
+## Intrinsic Predicates
+
+Rule conditions can use intrinsic predicates for numeric and temporal checks. Intrinsic arguments may be:
+
+- `<numeric_literal>` — a numeric constant (e.g. `10000`)
+- `<date_literal>` — a date in `YYYY-MM-DD` format
+- `<fact_reference>` — a name referring to a numeric or date fact asserted in the scenario
+
+Example rule conditions:
+
+```text
+If aboveThreshold production 10000
+If withinWindow filingDate 2025-03-01 2025-04-15
+If daysBetween filingDate deadline 30
+```
+
+Available intrinsics:
+
+| Intrinsic | Arguments | Purpose |
+|-----------|-----------|---------|
+| `aboveThreshold` | value, threshold | value > threshold |
+| `belowThreshold` | value, threshold | value < threshold |
+| `between` | value, lower, upper | value in range |
+| `daysBetween` | date1, date2 | date order (d2 >= d1) |
+| `daysBetween` | date1, date2, maxDays | days between <= maxDays |
+| `withinWindow` | date, start, end | date in [start, end] |
+| `percentage` | amount, rate | placeholder |
+| `taxAmount` | base, rate | placeholder |
+
+Numeric facts are asserted with `assert numeric <Name> <value>`. Date facts are asserted with `assert date <Name> <YYYY-MM-DD>`.
 
 ## Controlled Forms
 

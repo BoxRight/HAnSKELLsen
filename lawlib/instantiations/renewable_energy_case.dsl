@@ -25,6 +25,8 @@ scenario ProjectDisruptionAndStepIn:
         act Developer pays LoanRepayment to Bank.
     at 2025-03-10
         act Developer pays InsurancePremium to Insurer.
+    at 2025-06-01
+        assert numeric production 12000.
     at 2025-06-10
         assert liability StormDamage is present.
         natural event SevereStorm damaged the solar installation.
@@ -42,5 +44,6 @@ scenario ProjectDisruptionAndStepIn:
         act Developer repairs RepairService to Farmer.
     at 2025-07-15
         act Developer provides BiodiversityOffset to Municipality.
+        assert date filingDate 2025-07-15.
     at 2025-07-20
         act Agency approves BiodiversityCertification to Developer.

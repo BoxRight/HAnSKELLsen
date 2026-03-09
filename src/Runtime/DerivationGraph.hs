@@ -85,6 +85,7 @@ buildDerivationGraph compiled result =
       P.Capability n -> "capability(" ++ n ++ ")"
       P.Owned obj -> "owned(" ++ show obj ++ ")"
       P.NumericFact n v -> "numeric(" ++ n ++ "=" ++ show v ++ ")"
+      P.DateFact n d -> "date(" ++ n ++ "=" ++ show d ++ ")"
 
     -- Rule label with condition and epoch-date handling
     ruleLabel fire =

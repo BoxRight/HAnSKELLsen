@@ -134,3 +134,5 @@ patrimonyLabel patrimonyFact =
     P.ApprovedContractor contractorName -> "approved contractor " ++ contractorName
     P.Capability capabilityName -> "authority " ++ capabilityName ++ " is present"
     P.Owned obj -> "ownership of " ++ oName obj
+    P.NumericFact n v -> "numeric " ++ n ++ " = " ++ show v
+    P.DateFact n d -> "date " ++ n ++ " = " ++ show d

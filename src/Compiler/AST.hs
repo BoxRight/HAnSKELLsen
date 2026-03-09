@@ -133,7 +133,8 @@ data StandingFactAst
 
 data IntrinsicArgAst
   = IntrinsicFactRef String
-  | IntrinsicLiteral Double
+  | IntrinsicNumericLiteral Double
+  | IntrinsicDateLiteral Day
   deriving (Eq, Show)
 
 data ConditionAst
@@ -191,6 +192,7 @@ data ScenarioAssertionAst
   | ScenarioCounterAct ActionPhraseAst
   | ScenarioCondition ConditionAst
   | ScenarioNumericAssert String Double
+  | ScenarioDateAssert String Day
   | ScenarioEvent LegalEventAst
   deriving (Eq, Show)
 

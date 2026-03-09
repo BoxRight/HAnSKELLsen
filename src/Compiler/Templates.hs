@@ -347,7 +347,8 @@ substituteIntrinsicArg :: TemplateBindings -> IntrinsicArgAst -> IntrinsicArgAst
 substituteIntrinsicArg bindings arg =
   case arg of
     IntrinsicFactRef name -> IntrinsicFactRef (substituteText bindings name)
-    IntrinsicLiteral d -> IntrinsicLiteral d
+    IntrinsicNumericLiteral d -> IntrinsicNumericLiteral d
+    IntrinsicDateLiteral day -> IntrinsicDateLiteral day
 
 substituteRule :: TemplateBindings -> RuleAst -> RuleAst
 substituteRule bindings ruleAst =
@@ -407,6 +408,8 @@ substituteScenarioAssertion bindings assertion =
       ScenarioCondition (substituteCondition bindings condition)
     ScenarioNumericAssert factName value ->
       ScenarioNumericAssert (substituteText bindings factName) value
+    ScenarioDateAssert factName day ->
+      ScenarioDateAssert (substituteText bindings factName) day
     ScenarioEvent legalEvent ->
       ScenarioEvent (substituteLegalEvent bindings legalEvent)
 

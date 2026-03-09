@@ -265,6 +265,7 @@ prettyIntrinsicArg arg =
   case arg of
     ResolvedIntrinsicFactRef n -> n
     ResolvedIntrinsicLiteral d -> show d
+    ResolvedIntrinsicDateLiteral day -> show day
 
 prettyDerivedFact :: DisplayVerbMap -> IndexedGen -> [String]
 prettyDerivedFact displayMap indexed =

@@ -2,7 +2,7 @@
 
 module Runtime.Intrinsics
   ( IntrinsicEnv
-  , IntrinsicValue
+  , IntrinsicValue(..)
   , defaultIntrinsicEnv
   , evaluateIntrinsic
   ) where
@@ -11,8 +11,11 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 import Data.Time.Calendar (Day, diffDays)
 
--- | Value passed to intrinsics: Double for numeric, Day for dates.
-type IntrinsicValue = Either Double Day
+-- | Value passed to intrinsics: numeric or date.
+data IntrinsicValue
+  = NumericValue Double
+  | DateValue Day
+  deriving (Eq, Show)
 
 -- | Intrinsic functions are pure predicates: [IntrinsicValue] -> Bool.
 type IntrinsicFn = [IntrinsicValue] -> Bool
@@ -35,43 +38,45 @@ defaultIntrinsicEnv =
 
 aboveThreshold :: IntrinsicFn
 aboveThreshold = \case
-  [Left v, Left t] -> v > t
+  [NumericValue v, NumericValue t] -> v > t
   _ -> False
 
 belowThreshold :: IntrinsicFn
 belowThreshold = \case
-  [Left v, Left t] -> v < t
+  [NumericValue v, NumericValue t] -> v < t
   _ -> False
 
 between :: IntrinsicFn
 between = \case
-  [Left v, Left lo, Left hi] -> v >= lo && v <= hi
+  [NumericValue v, NumericValue lo, NumericValue hi] -> v >= lo && v <= hi
   _ -> False
 
--- daysBetween: for condition use, check if days between dates is <= N.
--- Simplified: daysBetweenLEQ(d1, d2, maxDays) -> abs(diff) <= maxDays
--- For now we implement daysBetween(d1,d2) as d2 >= d1 (date order check)
+-- daysBetween: two signatures:
+-- (d1, d2) -> Bool: d2 >= d1 (backward compatible, date order)
+-- (d1, d2, maxDays) -> Bool: abs(diffDays d2 d1) <= maxDays (filing window)
 daysBetween :: IntrinsicFn
 daysBetween = \case
-  [Right d1, Right d2] -> d2 >= d1
+  [DateValue d1, DateValue d2] -> d2 >= d1
+  [DateValue d1, DateValue d2, NumericValue maxDays] ->
+    abs (fromIntegral (diffDays d2 d1)) <= maxDays
   _ -> False
 
 -- withinWindow: date >= start && date <= end
 withinWindow :: IntrinsicFn
 withinWindow = \case
-  [Right d, Right start, Right end] -> d >= start && d <= end
+  [DateValue d, DateValue start, DateValue end] -> d >= start && d <= end
   _ -> False
 
 -- percentage/taxAmount: for condition use, these might check a computed value.
 -- Placeholder: accept two numeric args and return True (always passes)
 percentage :: IntrinsicFn
 percentage = \case
-  [Left _amount, Left _rate] -> True
+  [NumericValue _amount, NumericValue _rate] -> True
   _ -> False
 
 taxAmount :: IntrinsicFn
 taxAmount = \case
-  [Left _base, Left _rate] -> True
+  [NumericValue _base, NumericValue _rate] -> True
   _ -> False
 
 -- | Evaluate an intrinsic by name with resolved arguments.

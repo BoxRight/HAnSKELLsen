@@ -137,15 +137,26 @@ resolveIntrinsicArgs args patr =
       case arg of
         ResolvedIntrinsicFactRef factName ->
           case lookupNumericFact factName patrState of
-            Just v -> Just (Left v)
-            Nothing -> Nothing
+            Just v -> Just (NumericValue v)
+            Nothing ->
+              case lookupDateFact factName patrState of
+                Just d -> Just (DateValue d)
+                Nothing -> Nothing
         ResolvedIntrinsicLiteral d ->
-          Just (Left d)
+          Just (NumericValue d)
+        ResolvedIntrinsicDateLiteral day ->
+          Just (DateValue day)
 
 lookupNumericFact :: String -> P.PatrimonyState -> Maybe Double
 lookupNumericFact name patr =
   case [v | P.NumericFact n v <- S.toList patr, n == name] of
     v : _ -> Just v
+    [] -> Nothing
+
+lookupDateFact :: String -> P.PatrimonyState -> Maybe Day
+lookupDateFact name patr =
+  case [d | P.DateFact n d <- S.toList patr, n == name] of
+    d : _ -> Just d
     [] -> Nothing
 
 adjustConsequentTime :: Day -> IndexedGen -> IndexedGen

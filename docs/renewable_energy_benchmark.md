@@ -44,6 +44,7 @@ cabal run hanskellsen-app -- lawlib/instantiations/renewable_energy_case.dsl --s
 - **Lawyer-readable reports** using domain-specific verbs from vocabulary (grant, pay, install, etc.).
 - Counter-acts for breach modeling.
 - Rule chains that derive later duties from earlier acts or institutional assertions.
+- **Numeric and date-based threshold reasoning**: `aboveThreshold`, `belowThreshold`, `between`, `withinWindow`, `daysBetween` in rule conditions; `assert numeric <Name> <value>` and `assert date <Name> <YYYY-MM-DD>` in scenarios.
 
 ### Used in This Benchmark
 
@@ -57,27 +58,22 @@ The lawlib currently uses:
 
 - **Bank step-in versus lease termination**: The benchmark uses a derived prohibition (`Farmer must refrain from terminate LeaseTermination`) when the bank assumes step-in. The DSL also supports `suspend` clauses, but the backend's override semantics (inserting `Overridden` markers) do not currently deactivate the original privilege when the marker is present. For equivalence preservation, the prohibition-based rule is used.
 - **Storm damage and insurance**: Uses asserted liabilities and assets. The `approved contractor` institutional fact is used for the repair-permission precondition.
-- **Performance and threshold issues**: The scenario can record performance problems as events, but rules cannot yet compare against numeric thresholds.
+- **Performance and threshold issues**: The scenario can record performance problems as events. Rules can now compare against numeric thresholds using intrinsics (e.g. `If aboveThreshold production 10000 then ...`).
 
 ### Not Yet Expressible
 
-- **Numeric and date-based threshold reasoning**: project size above threshold, production below threshold, filing deadline calculations, tax-credit amounts, revenue-share formulas.
-- **Structured procedural compliance chains**: e.g. claim filed within thirty days and repair performed by an approved contractor (as a single multi-premise condition with date arithmetic).
+- **Structured procedural compliance chains**: e.g. claim filed within thirty days and repair performed by an approved contractor (as a single multi-premise condition with date arithmetic). The `daysBetween` intrinsic supports date arithmetic; combining it with other conditions in a single rule is supported.
 
 ## Residual Computational Needs
 
-Only after the legal-structural gaps above are addressed should a narrow intrinsic layer be considered.
+The intrinsic layer is implemented. Available intrinsics include:
 
-Likely future intrinsic candidates:
+- `aboveThreshold`, `belowThreshold`, `between` — numeric threshold comparisons
+- `withinWindow` — date in validity window (e.g. filing deadlines)
+- `daysBetween` — date order or "within N days" checks
+- `percentage`, `taxAmount` — placeholders for future formula support
 
-- threshold comparisons for project size, emissions, or production
-- `daysBetween`-style filing-window checks
-- tax-credit amount calculations
-- insurance payout calculations
-- revenue-share calculations
-- percentage and bracket computations
-
-These should be restricted to pure deterministic helpers and used only where the benchmark still needs calculator-like support.
+Example: to add production-threshold eligibility to the tax credit, use `assert numeric production 12000` in the scenario and `If aboveThreshold production 10000 then ...` in the rule. See [test/fixtures/intrinsic_tests.dsl](../test/fixtures/intrinsic_tests.dsl) for a minimal example.
 
 ## Verification
 

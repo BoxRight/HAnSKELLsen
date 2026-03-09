@@ -63,6 +63,7 @@ test-suite hanskellsen-tests
       TestBenchmark
     , TestImportMetadata
     , TestInstitutionalSemantics
+    , TestIntrinsics
     , TestInvariants
   build-depends:
       base >=4.14 && <5
