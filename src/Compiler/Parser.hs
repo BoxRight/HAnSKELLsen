@@ -22,6 +22,7 @@ data TopBlock
   | TopObjects [ObjectDecl]
   | TopVocabulary [VocabularyDecl]
   | TopArticle ArticleAst
+  | TopScenario ScenarioAst
 
 data ProcedureEntry
   = ProcedureOr
@@ -45,6 +46,7 @@ parseLawModule = do
       , lawObjects = concat [objects | TopObjects objects <- blocks]
       , lawVocabulary = concat [vocab | TopVocabulary vocab <- blocks]
       , lawArticles = [article | TopArticle article <- blocks]
+      , lawScenarios = [scenario | TopScenario scenario <- blocks]
       }
 
 parseLawMeta :: Parser LawMetaAst
@@ -80,6 +82,7 @@ parseTopBlock =
     , parsePartiesSection
     , parseObjectsSection
     , parseArticle
+    , parseScenario
     ]
 
 parseVocabularySection :: Parser TopBlock
@@ -155,6 +158,74 @@ parseArticle = do
         , articleHeading = normalizeOptional heading
         , articleClauses = clauses
         }
+
+parseScenario :: Parser TopBlock
+parseScenario = do
+  _ <- chunk "scenario"
+  hspace1
+  name <- manyTill anySingle (char ':')
+  endOfLineOrEof
+  entries <- some (try parseScenarioEntry)
+  pure $
+    TopScenario $
+      ScenarioAst
+        { scenarioName = trim name
+        , scenarioEntries = entries
+        }
+
+parseScenarioEntry :: Parser ScenarioEntryAst
+parseScenarioEntry = do
+  indent 4
+  _ <- chunk "at"
+  hspace1
+  rawDate <- trim <$> restOfLine
+  day <-
+    case parseDay rawDate of
+      Just parsedDay -> pure parsedDay
+      Nothing -> fail ("invalid scenario date `" ++ rawDate ++ "`")
+  assertions <- some (try parseScenarioAssertion)
+  pure $
+    ScenarioEntryAst
+      { scenarioDate = day
+      , scenarioAssertions = assertions
+      }
+
+parseScenarioAssertion :: Parser ScenarioAssertionAst
+parseScenarioAssertion = do
+  indent 8
+  choice
+    [ try parseScenarioCounterAct
+    , try parseScenarioAct
+    , try parseScenarioCondition
+    , try parseScenarioEvent
+    ]
+
+parseScenarioAct :: Parser ScenarioAssertionAst
+parseScenarioAct = do
+  _ <- chunk "act"
+  hspace1
+  body <- trim <$> restOfLine
+  ScenarioAct <$> either fail pure (parseActionSentence body)
+
+parseScenarioCounterAct :: Parser ScenarioAssertionAst
+parseScenarioCounterAct = do
+  _ <- chunk "counteract"
+  hspace1
+  body <- trim <$> restOfLine
+  ScenarioCounterAct <$> either fail pure (parseCounterActionSentence body)
+
+parseScenarioCondition :: Parser ScenarioAssertionAst
+parseScenarioCondition = do
+  _ <- chunk "assert"
+  hspace1
+  body <- trim <$> restOfLine
+  ScenarioCondition <$> either fail pure (parseConditionSentence body)
+
+parseScenarioEvent :: Parser ScenarioAssertionAst
+parseScenarioEvent = do
+  _ <- chunk "event"
+  hspace1
+  ScenarioEvent . trim <$> restOfLine
 
 parseArticleClause :: Parser ClauseAst
 parseArticleClause = do
@@ -286,8 +357,7 @@ parseConditionSentence raw =
     [partyName, "owns", objectName] ->
       Right (OwnershipConditionAst partyName objectName)
     _ ->
-      Left
-        ("unsupported condition `" ++ raw ++ "`")
+      ActionConditionAst <$> parseActionSentence raw
 
 parseActionSentence :: String -> Either String ActionPhraseAst
 parseActionSentence raw =
@@ -301,6 +371,18 @@ parseActionSentence raw =
     _ ->
       Left
         ("unsupported action phrase `" ++ raw ++ "`")
+
+parseCounterActionSentence :: String -> Either String ActionPhraseAst
+parseCounterActionSentence raw =
+  case words (stripSentence raw) of
+    actorName : "fails" : "to" : _verbName : objectName : rest ->
+      buildAction actorName "fails" objectName rest
+    actorName : "fails" : objectName : rest ->
+      buildAction actorName "fails" objectName rest
+    actorName : "does" : "not" : _verbName : objectName : rest ->
+      buildAction actorName "fails" objectName rest
+    _ ->
+      parseActionSentence raw
 
 parseDemandSentence :: String -> Either String ClaimPhraseAst
 parseDemandSentence raw =

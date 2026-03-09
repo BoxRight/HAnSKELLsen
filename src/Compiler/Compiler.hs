@@ -8,6 +8,10 @@ module Compiler.Compiler
   , compileInitialNorm
   , compileInitialSystemState
   , compileLawModule
+  , resolveAction
+  , resolveCondition
+  , resolvedActionToAct
+  , resolvedActionToCounterAct
   ) where
 
 import Compiler.AST
@@ -39,6 +43,7 @@ data ResolvedClaim = ResolvedClaim
 
 data ResolvedCondition
   = ResolvedOwnershipCondition Person Object
+  | ResolvedActionCondition (Act Active)
   deriving (Eq, Show)
 
 data ProcedureIR = ProcedureIR
@@ -213,11 +218,22 @@ resolveCondition symbols conditionAst =
         ResolvedOwnershipCondition
           (mkPerson party)
           (mkObject (objectKind objectDecl) objectName)
+    ActionConditionAst actionAst ->
+      ResolvedActionCondition . resolvedActionToAct
+        <$> resolveAction symbols actionAst
 
 resolvedActionToAct :: ResolvedAction -> Act Active
 resolvedActionToAct action =
   normalizeAct $
     Simple
+      (resolvedActionActor action)
+      (resolvedActionObject action)
+      (resolvedActionTarget action)
+
+resolvedActionToCounterAct :: ResolvedAction -> Act Passive
+resolvedActionToCounterAct action =
+  normalizeAct $
+    Counter
       (resolvedActionActor action)
       (resolvedActionObject action)
       (resolvedActionTarget action)

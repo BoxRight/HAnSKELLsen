@@ -175,7 +175,7 @@ claimFulfilled state =
         GClaim (Claim act) ->
           case act of
             Simple _ _ _ ->  -- Act Active
-              if S.member (IndexedGen capIdx time (GAct act)) acc
+              if hasVisibleAct capIdx time act acc
                  then let newGen = IndexedGen capIdx time (GFulfillment act)
                       in if S.member newGen acc
                             then acc
@@ -198,7 +198,7 @@ claimEnforceable state =
           case act of
             Simple _ _ _ ->  -- Act Active
               let counter = activeToPassive act
-              in if S.member (IndexedGen capIdx time (GAct counter)) acc
+              in if hasVisibleCounterAct capIdx time counter acc
                     then let newGen = IndexedGen capIdx time (GEnforceable act)
                          in if S.member newGen acc
                                then acc
@@ -221,7 +221,7 @@ obligationViolation state =
           case act of
             Simple _ _ _ ->  -- Act Active
               let counter = activeToPassive act
-              in if S.member (IndexedGen capIdx time (GAct counter)) acc
+              in if hasVisibleCounterAct capIdx time counter acc
                     then let newGen = IndexedGen capIdx time (GViolation counter)
                          in if S.member newGen acc
                                then acc
@@ -408,3 +408,25 @@ runExampleNorm norm =
   let initialState = SystemState { normState = norm, patrState = P.emptyPatrimony }
       finalState = runExample initialState
   in normState finalState
+
+hasVisibleAct :: CapabilityIndex -> Day -> Act Active -> Norm -> Bool
+hasVisibleAct expectedCap earliestTime expectedAct norm =
+  any matches (S.toList norm)
+  where
+    matches (IndexedGen capIdx visibleTime visibleGen) =
+      capIdx == expectedCap
+        && visibleTime >= earliestTime
+        && case visibleGen of
+             GAct visibleAct -> show visibleAct == show expectedAct
+             _ -> False
+
+hasVisibleCounterAct :: CapabilityIndex -> Day -> Act Passive -> Norm -> Bool
+hasVisibleCounterAct expectedCap earliestTime expectedAct norm =
+  any matches (S.toList norm)
+  where
+    matches (IndexedGen capIdx visibleTime visibleGen) =
+      capIdx == expectedCap
+        && visibleTime >= earliestTime
+        && case visibleGen of
+             GAct visibleAct -> show visibleAct == show expectedAct
+             _ -> False

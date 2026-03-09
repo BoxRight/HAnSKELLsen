@@ -17,9 +17,12 @@ library
     , Compiler.SymbolTable
     , Compiler.Parser
     , Compiler.Compiler
+    , Compiler.Scenario
     , Pretty.PrettyNorm
     , Pretty.PrettyTrace
     , Pretty.PrettyReport
+    , Runtime.RuleExecution
+    , Runtime.Audit
   build-depends:
       base >=4.14 && <5
     , containers
@@ -32,6 +35,8 @@ executable hanskellsen-app
   main-is:             Main.hs
   build-depends:
       base >=4.14 && <5
+    , containers
     , megaparsec
+    , time
     , hanskellsen
   default-language:    Haskell2010

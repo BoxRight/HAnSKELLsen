@@ -75,6 +75,7 @@ data ConditionAst
       { conditionPartyName :: String
       , conditionObjectName :: String
       }
+  | ActionConditionAst ActionPhraseAst
   deriving (Eq, Show)
 
 data RuleAst = RuleAst
@@ -97,11 +98,31 @@ data ArticleAst = ArticleAst
   }
   deriving (Eq, Show)
 
+data ScenarioAssertionAst
+  = ScenarioAct ActionPhraseAst
+  | ScenarioCounterAct ActionPhraseAst
+  | ScenarioCondition ConditionAst
+  | ScenarioEvent String
+  deriving (Eq, Show)
+
+data ScenarioEntryAst = ScenarioEntryAst
+  { scenarioDate :: Day
+  , scenarioAssertions :: [ScenarioAssertionAst]
+  }
+  deriving (Eq, Show)
+
+data ScenarioAst = ScenarioAst
+  { scenarioName :: String
+  , scenarioEntries :: [ScenarioEntryAst]
+  }
+  deriving (Eq, Show)
+
 data LawModuleAst = LawModuleAst
   { lawMeta :: LawMetaAst
   , lawParties :: [PartyDecl]
   , lawObjects :: [ObjectDecl]
   , lawVocabulary :: [VocabularyDecl]
   , lawArticles :: [ArticleAst]
+  , lawScenarios :: [ScenarioAst]
   }
   deriving (Eq, Show)

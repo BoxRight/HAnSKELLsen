@@ -41,6 +41,15 @@ article 4 Normal Performance
         Lessee transfers BankDeposit to Lessor.
 
 article 5 Derived Effect
-    rule UseRightFromPropertyHolding
-        If Lessor owns Property
+    rule RentDutyAfterUseGranted
+        If Lessor grants LeaseUse to Lessee
+        then Lessee must pay Rent to Lessor.
+    rule UseDutyAfterRentPaid
+        If Lessee pays Rent to Lessor
         then Lessor must grant LeaseUse to Lessee.
+
+scenario LeaseBreach:
+    at 2025-01-21
+        act Lessor grants LeaseUse to Lessee.
+    at 2026-01-21
+        counteract Lessee fails Rent to Lessor.
