@@ -19,7 +19,7 @@ parties
     <Alias>: <DisplayName>[, natural person|legal person][, enjoy capacity|exercise capacity][, address <Text>]
 
 objects
-    <Alias>: <movable|nonmovable|expendable|money|service>[, performance|omission][, of <Object>][, start <YYYY-MM-DD>][, due <YYYY-MM-DD>][, end <YYYY-MM-DD>]
+    <Alias>: <movable|nonmovable|non_movable|expendable|money|service>[, performance|omission][, of <Object>][, start <YYYY-MM-DD>][, due <YYYY-MM-DD>][, end <YYYY-MM-DD>]
 
 article <Number> [Optional Heading]
     fact <Party> owns <Object>.
@@ -61,8 +61,6 @@ scenario <Name>:
         assert approved contractor <Name> is present.
         assert numeric <Name> <value>.
         assert date <Name> <YYYY-MM-DD>.
-        assert event <Text>.
-        assert natural event <Text>.
         event <Text>
         natural event <Text>
 
@@ -78,6 +76,7 @@ instantiate <TemplateName>(<Param>=<Value>, <Param>=<Value>, ...)
 - Use four spaces for section contents.
 - Use eight spaces for `procedure` and `rule` bodies.
 - Use eight spaces for scenario assertions inside an `at` block.
+- `event` and `natural event` are standalone (no `assert` prefix); other scenario facts use `assert`.
 - Use four spaces for forms inside a `template` body.
 - Symbolic algebra is intentionally hidden from the legal surface language.
 - The current compiler slice resolves parties, objects, and verbs strictly.
