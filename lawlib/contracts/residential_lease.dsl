@@ -22,7 +22,6 @@ objects
 
 article 1 Fundamental Duties
     obligation Lessor must grant LeaseUse to Lessee.
-    obligation Lessee must pay Rent to Lessor.
 
 article 2 Core Claims
     claim Lessee may demand grant of LeaseUse from Lessor.
@@ -53,3 +52,7 @@ scenario LeaseBreach:
         act Lessor grants LeaseUse to Lessee.
     at 2026-01-21
         counteract Lessee fails Rent to Lessor.
+
+scenario RentThenUse:
+    at 2025-01-21
+        act Lessee pays Rent to Lessor.

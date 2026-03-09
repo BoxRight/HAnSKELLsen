@@ -21,6 +21,7 @@ library
     , Pretty.PrettyNorm
     , Pretty.PrettyTrace
     , Pretty.PrettyReport
+    , Runtime.Provenance
     , Runtime.RuleExecution
     , Runtime.Audit
   build-depends:

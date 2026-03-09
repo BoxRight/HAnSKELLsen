@@ -17,6 +17,7 @@ import NormativeGenerators
 import Pretty.PrettyNorm
 import Pretty.PrettyTrace
 import Runtime.Audit
+import Runtime.Provenance
 
 generateReport :: CompiledLawModule -> SystemState -> SystemState -> String
 generateReport compiled initialState finalState =
@@ -99,13 +100,17 @@ generateAuditReport compiled auditResult =
       ++ procedureSection
       ++ ruleSection
       ++ scenarioSection
+      ++ ruleTraceSection
+      ++ temporalTraceSection
       ++ derivedSection
+      ++ complianceSection
+      ++ classificationSection
       ++ finalStateSection
       ++ noteSection
   where
     seedFacts = sortIndexed (S.toList (activeNorms (normState (auditSeedState auditResult))))
     finalFacts = sortIndexed (S.toList (activeNorms (normState (auditFinalState auditResult))))
-    derivedFacts = filter (`S.notMember` normState (auditSeedState auditResult)) finalFacts
+    derivedFacts = map consequent (filter insertedNew (auditRuleFirings auditResult))
 
     scenarioHeader =
       case auditScenarioName auditResult of
@@ -133,7 +138,7 @@ generateAuditReport compiled auditResult =
             ++ formatBulletList (map prettyRuleSpec (compiledRules compiled))
 
     scenarioSection
-      | null (auditVisibleTimeline auditResult) =
+      | null (auditScenarioSeeds auditResult) =
           [ ""
           , "Visible scenario timeline:"
           , "- No scenario facts are active at this audit date."
@@ -142,13 +147,37 @@ generateAuditReport compiled auditResult =
           [ ""
           , "Visible scenario timeline:"
           ]
-            ++ concatMap prettyTimelineEntry (auditVisibleTimeline auditResult)
+            ++ formatBulletList (map prettyScenarioSeed (auditScenarioSeeds auditResult))
+
+    ruleTraceSection
+      | null (auditRuleFirings auditResult) =
+          [ ""
+          , "Rule firing trace:"
+          , "- No DSL-derived rule firings were recorded."
+          ]
+      | otherwise =
+          [ ""
+          , "Rule firing trace:"
+          ]
+            ++ formatBulletList (map prettyRuleFire (auditRuleFirings auditResult))
+
+    temporalTraceSection
+      | null filteredTrace =
+          [ ""
+          , "Temporal derivation trace:"
+          , "- No derivation steps were recorded."
+          ]
+      | otherwise =
+          [ ""
+          , "Temporal derivation trace:"
+          ]
+            ++ concatMap prettyTraceDay filteredTrace
 
     derivedSection
       | null derivedFacts =
           [ ""
           , "Derived norms:"
-          , "- No additional norms were derived by the current engine."
+          , "- No additional norms were derived by DSL-traced rule execution."
           ]
       | otherwise =
           [ ""
@@ -156,18 +185,40 @@ generateAuditReport compiled auditResult =
           ]
             ++ concatMap prettyDerivedFact derivedFacts
 
+    complianceSection =
+      [ ""
+      , "Compliance summary:"
+      ]
+        ++ formatBulletList (prettyComplianceSummary (auditComplianceSummary auditResult))
+
+    classificationSection
+      | null (classifications (auditComplianceSummary auditResult)) =
+          [ ""
+          , "Audit classification:"
+          , "- No violation classifications were produced."
+          ]
+      | otherwise =
+          [ ""
+          , "Audit classification:"
+          ]
+            ++ formatBulletList (map prettyClassification (classifications (auditComplianceSummary auditResult)))
+
     finalStateSection =
       [ ""
       , "Active normative state:"
       ]
-        ++ formatBulletList (map (renderNormBody . prettyIndexedGen) finalFacts)
+        ++ groupedFinalState finalFacts
 
     noteSection =
       [ ""
       , "Notes:"
       , "- DSL rules are executed alongside the built-in engine rules in this audit path."
       , "- Scenario slicing includes only facts visible on or before the audit date."
+      , "- Built-in engine rules still affect the final state, but only DSL rule firings are explicitly traced in this slice."
       ]
+
+    filteredTrace =
+      filter (\(_, steps) -> not (null steps)) (map firstCauseSteps (auditDerivationTrace auditResult))
 
 prettyProcedure :: ProcedureIR -> String
 prettyProcedure procedure =
@@ -212,6 +263,95 @@ prettyTimelineEntry (day, delta) =
   [ "- " ++ show day
   , renderNormBody (unlines (deltaDescriptions delta))
   ]
+
+prettyTraceDay :: (Day, [DerivationStep]) -> [String]
+prettyTraceDay (day, steps) =
+  ("- " ++ show day) : map prettyTraceLine steps
+  where
+    prettyTraceLine step = prettyDerivationStep step
+
+firstCauseSteps :: (Day, [DerivationStep]) -> (Day, [DerivationStep])
+firstCauseSteps (day, steps) =
+  (day, go S.empty steps)
+  where
+    go _ [] = []
+    go seen (step : rest) =
+      case step of
+        SeedStep _ -> step : go seen rest
+        RuleStep firing ->
+          let key = consequent firing
+          in if S.member key seen
+                then go seen rest
+                else step : go (S.insert key seen) rest
+
+prettyClassification :: AuditClassification -> String
+prettyClassification classification =
+  "Authority: "
+    ++ classificationAuthority classification
+    ++ "; fiber: "
+    ++ classificationFiber classification
+
+groupedFinalState :: [IndexedGen] -> [String]
+groupedFinalState facts =
+  concatMap renderGroup groups
+  where
+    groups =
+      [ ("Claims", filter isClaim facts)
+      , ("Obligations", filter isObligation facts)
+      , ("Prohibitions", filter isProhibition facts)
+      , ("Violations", filter isViolation facts)
+      , ("Fulfillments", filter isFulfillment facts)
+      , ("Enforceable claims", filter isEnforceable facts)
+      , ("Acts and events", filter isActOrEvent facts)
+      ]
+
+    renderGroup (_, []) = []
+    renderGroup (title, groupedFacts) =
+      ("- " ++ title ++ ":")
+        : map (renderNormBody . prettyIndexedGen) groupedFacts
+
+isClaim :: IndexedGen -> Bool
+isClaim indexed =
+  case gen indexed of
+    GClaim _ -> True
+    _ -> False
+
+isObligation :: IndexedGen -> Bool
+isObligation indexed =
+  case gen indexed of
+    GObligation _ -> True
+    _ -> False
+
+isProhibition :: IndexedGen -> Bool
+isProhibition indexed =
+  case gen indexed of
+    GProhibition _ -> True
+    _ -> False
+
+isViolation :: IndexedGen -> Bool
+isViolation indexed =
+  case gen indexed of
+    GViolation _ -> True
+    _ -> False
+
+isFulfillment :: IndexedGen -> Bool
+isFulfillment indexed =
+  case gen indexed of
+    GFulfillment _ -> True
+    _ -> False
+
+isEnforceable :: IndexedGen -> Bool
+isEnforceable indexed =
+  case gen indexed of
+    GEnforceable _ -> True
+    _ -> False
+
+isActOrEvent :: IndexedGen -> Bool
+isActOrEvent indexed =
+  case gen indexed of
+    GAct _ -> True
+    GEvent _ -> True
+    _ -> False
 
 sortIndexed :: [IndexedGen] -> [IndexedGen]
 sortIndexed = sortOn (\indexed -> (time indexed, capIndex indexed, show (gen indexed)))
