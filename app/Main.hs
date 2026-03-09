@@ -79,7 +79,7 @@ runAuditOrReplay compiled scenarios options
 outputAudit :: CompiledLawModule -> CliOptions -> AuditResult -> IO ()
 outputAudit compiled options result = do
   case cliGraphFormat options of
-    Just fmt -> putStrLn (outputGraph fmt result)
+    Just fmt -> putStrLn (outputGraph fmt compiled result)
     Nothing ->
       case cliOutputFormat options of
         FormatJson -> putLbs (auditResultToJson compiled result)
@@ -97,9 +97,9 @@ outputReplay compiled options replay = do
           putStrLn "")
         replay
 
-outputGraph :: GraphFormat -> AuditResult -> String
-outputGraph fmt result =
-  let graph = buildDerivationGraph result
+outputGraph :: GraphFormat -> CompiledLawModule -> AuditResult -> String
+outputGraph fmt compiled result =
+  let graph = buildDerivationGraph compiled result
   in case fmt of
     GraphJson -> unpack (exportDerivationGraphJson graph)
     GraphDot -> exportDerivationGraphDot graph

@@ -1,6 +1,7 @@
 module Pretty.PrettyReport
   ( generateReport
   , generateAuditReport
+  , prettyCondition
   ) where
 
 import Capability (prettyCapability)

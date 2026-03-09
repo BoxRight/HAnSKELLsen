@@ -120,9 +120,11 @@ cabal run hanskellsen-app -- <law-file> --scenario <name> --graph mermaid
 
 ### Graph Structure
 
-- **Generator nodes**: Facts from scenario seeds and rule witnesses/consequents
-- **Rule nodes**: Each rule firing (indexed by rule name, witness day, firing index)
+- **Generator nodes**: Facts from scenario seeds and rule witnesses/consequents. Node colors indicate provenance: lightblue (seed), lightgreen (derived), lightyellow (patrimony).
+- **Rule nodes**: Each rule firing with condition annotation. Epoch-date triggers show `[institutional fact]` instead of a synthetic date.
 - **Edges**: `witness fact → rule` and `rule → consequent`
+
+See [derivation_graph_roadmap.md](derivation_graph_roadmap.md) for the evaluation and improvement roadmap.
 
 ### Export Formats
 
