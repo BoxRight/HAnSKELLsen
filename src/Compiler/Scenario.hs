@@ -37,7 +37,9 @@ data CompiledScenario = CompiledScenario
 compileScenarios :: LawModuleAst -> Either [Diagnostic] [CompiledScenario]
 compileScenarios lawModule = do
   symbols <- buildSymbolTable lawModule
-  mapM (compileScenario (lawMeta lawModule) symbols) (lawScenarios lawModule)
+  mapM
+    (\sourcedScenario -> compileScenario (sourceMeta sourcedScenario) symbols (sourcePayload sourcedScenario))
+    (lawScenarios lawModule)
 
 emptyScenarioDelta :: ScenarioDelta
 emptyScenarioDelta =

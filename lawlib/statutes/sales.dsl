@@ -2,20 +2,7 @@ law SalesLaw
 authority legislative
 enacted 2025-01-01
 
-vocabulary
-    verb deliver: deliver
-    verb delivery: deliver
-    verb pay: pay
-    verb disclose: disclose
-
-parties
-    Seller: Alice Corp
-    Buyer: Bob
-
-objects
-    Goods: movable
-    Price: money
-    Secrets: service
+import "../shared/base_sale_shared.dsl"
 
 article 1 Core Duties
     obligation Seller must deliver Goods to Buyer.

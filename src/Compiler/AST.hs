@@ -20,6 +20,13 @@ data LawMetaAst = LawMetaAst
   }
   deriving (Eq, Show)
 
+data Sourced a = Sourced
+  { sourceMeta :: LawMetaAst
+  , sourcePath :: FilePath
+  , sourcePayload :: a
+  }
+  deriving (Eq, Show)
+
 data PartyDecl = PartyDecl
   { partyAlias :: String
   , partyDisplayName :: String
@@ -165,12 +172,63 @@ data ScenarioAst = ScenarioAst
   }
   deriving (Eq, Show)
 
+data TemplateBindingAst = TemplateBindingAst
+  { bindingParamName :: String
+  , bindingValueText :: String
+  }
+  deriving (Eq, Show)
+
+data TemplateInstantiateAst = TemplateInstantiateAst
+  { instantiateTemplateName :: String
+  , instantiateBindings :: [TemplateBindingAst]
+  }
+  deriving (Eq, Show)
+
+data TemplateBodyFormAst
+  = TemplateBodyParties [PartyDecl]
+  | TemplateBodyObjects [ObjectDecl]
+  | TemplateBodyVocabulary [VocabularyDecl]
+  | TemplateBodyArticle ArticleAst
+  | TemplateBodyScenario ScenarioAst
+  | TemplateBodyInstantiate TemplateInstantiateAst
+  deriving (Eq, Show)
+
+data TemplateDeclAst = TemplateDeclAst
+  { templateNameAst :: String
+  , templateParamsAst :: [String]
+  , templateBodyAst :: [TemplateBodyFormAst]
+  }
+  deriving (Eq, Show)
+
+data ImportDeclAst = ImportDeclAst
+  { importPathAst :: FilePath
+  }
+  deriving (Eq, Show)
+
+data TopFormAst
+  = TopFormImport ImportDeclAst
+  | TopFormParties [PartyDecl]
+  | TopFormObjects [ObjectDecl]
+  | TopFormVocabulary [VocabularyDecl]
+  | TopFormArticle ArticleAst
+  | TopFormScenario ScenarioAst
+  | TopFormTemplate TemplateDeclAst
+  | TopFormInstantiate TemplateInstantiateAst
+  deriving (Eq, Show)
+
+data SurfaceLawModuleAst = SurfaceLawModuleAst
+  { surfaceLawMeta :: LawMetaAst
+  , surfaceLawPath :: FilePath
+  , surfaceTopForms :: [Sourced TopFormAst]
+  }
+  deriving (Eq, Show)
+
 data LawModuleAst = LawModuleAst
   { lawMeta :: LawMetaAst
   , lawParties :: [PartyDecl]
   , lawObjects :: [ObjectDecl]
   , lawVocabulary :: [VocabularyDecl]
-  , lawArticles :: [ArticleAst]
-  , lawScenarios :: [ScenarioAst]
+  , lawArticles :: [Sourced ArticleAst]
+  , lawScenarios :: [Sourced ScenarioAst]
   }
   deriving (Eq, Show)

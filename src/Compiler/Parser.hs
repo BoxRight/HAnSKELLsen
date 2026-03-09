@@ -24,30 +24,90 @@ data TopBlock
   | TopArticle ArticleAst
   | TopScenario ScenarioAst
 
+data TemplateTopBlock
+  = TemplateBlock TopBlock
+  | TemplateInstantiateBlock TemplateInstantiateAst
+
 data ProcedureEntry
   = ProcedureOr
   | ProcedureStep ActionPhraseAst
 
-parseLawFile :: FilePath -> String -> Either (ParseErrorBundle String Void) LawModuleAst
+parseLawFile :: FilePath -> String -> Either (ParseErrorBundle String Void) SurfaceLawModuleAst
 parseLawFile =
   runParser parseLawModule
 
-parseLawModule :: Parser LawModuleAst
+parseLawModule :: Parser SurfaceLawModuleAst
 parseLawModule = do
   skipBlankLines
   meta <- parseLawMeta
-  blocks <- many (skipBlankLines *> parseTopBlock)
+  filePath <- sourceName <$> getSourcePos
+  forms <- many (try (skipBlankLines *> parseTopForm))
   skipBlankLines
   eof
   pure $
-    LawModuleAst
-      { lawMeta = meta
-      , lawParties = concat [parties | TopParties parties <- blocks]
-      , lawObjects = concat [objects | TopObjects objects <- blocks]
-      , lawVocabulary = concat [vocab | TopVocabulary vocab <- blocks]
-      , lawArticles = [article | TopArticle article <- blocks]
-      , lawScenarios = [scenario | TopScenario scenario <- blocks]
+    SurfaceLawModuleAst
+      { surfaceLawMeta = meta
+      , surfaceLawPath = filePath
+      , surfaceTopForms = map (Sourced meta filePath) forms
       }
+
+parseTopForm :: Parser TopFormAst
+parseTopForm =
+  choice
+    [ try parseImportTopForm
+    , try parseTemplateDecl
+    , try parseInstantiateTopForm
+    , topBlockToTopForm <$> parseTopBlock
+    ]
+
+parseImportTopForm :: Parser TopFormAst
+parseImportTopForm = do
+  _ <- chunk "import"
+  hspace1
+  importPath <- char '"' *> manyTill anySingle (char '"')
+  endOfLineOrEof
+  pure (TopFormImport (ImportDeclAst importPath))
+
+parseTemplateDecl :: Parser TopFormAst
+parseTemplateDecl = do
+  _ <- chunk "template"
+  hspace1
+  templateName <- identifier
+  params <- parseTemplateParams
+  hspace
+  _ <- char ':'
+  endOfLineOrEof
+  bodyText <- parseIndentedBlockText 4
+  bodyForms <-
+    case runParser parseTemplateBodyForms ("template " ++ templateName) bodyText of
+      Left bundle -> fail (errorBundlePretty bundle)
+      Right forms -> pure forms
+  pure $
+    TopFormTemplate $
+      TemplateDeclAst
+        { templateNameAst = templateName
+        , templateParamsAst = params
+        , templateBodyAst = bodyForms
+        }
+
+parseInstantiateTopForm :: Parser TopFormAst
+parseInstantiateTopForm =
+  TopFormInstantiate <$> parseTemplateInstantiate
+
+parseTemplateBodyForms :: Parser [TemplateBodyFormAst]
+parseTemplateBodyForms = do
+  skipBlankLines
+  blocks <- many (try (skipBlankLines *> parseTemplateBodyBlock))
+  skipBlankLines
+  eof
+  pure (map templateTopBlockToBodyForm blocks)
+
+parseTemplateBodyBlock :: Parser TemplateTopBlock
+parseTemplateBodyBlock =
+  choice
+    [ try (TemplateInstantiateBlock <$> parseTemplateInstantiate)
+    , TemplateBlock <$> parseTopBlock
+    ]
 
 parseLawMeta :: Parser LawMetaAst
 parseLawMeta = do
@@ -209,6 +269,19 @@ parseScenario = do
         { scenarioName = trim name
         , scenarioEntries = entries
         }
+
+parseTemplateInstantiate :: Parser TemplateInstantiateAst
+parseTemplateInstantiate = do
+  _ <- chunk "instantiate"
+  hspace1
+  templateName <- identifier
+  bindings <- parseTemplateBindings
+  endOfLineOrEof
+  pure $
+    TemplateInstantiateAst
+      { instantiateTemplateName = templateName
+      , instantiateBindings = bindings
+      }
 
 parseScenarioEntry :: Parser ScenarioEntryAst
 parseScenarioEntry = do
@@ -530,6 +603,66 @@ appendToLast :: a -> [[a]] -> [[a]]
 appendToLast _ [] = []
 appendToLast x [ys] = [ys ++ [x]]
 appendToLast x (ys : yss) = ys : appendToLast x yss
+
+parseTemplateParams :: Parser [String]
+parseTemplateParams =
+  between (char '(') (char ')')
+    (sepBy (trim <$> identifier) (hspace *> char ',' *> hspace))
+
+parseTemplateBindings :: Parser [TemplateBindingAst]
+parseTemplateBindings =
+  between (char '(') (char ')')
+    (sepBy parseTemplateBinding (hspace *> char ',' *> hspace))
+
+parseTemplateBinding :: Parser TemplateBindingAst
+parseTemplateBinding = do
+  paramName <- identifier
+  hspace
+  _ <- char '='
+  hspace
+  valueText <- trim <$> takeWhileP Nothing (\c -> c /= ',' && c /= ')' && c /= '\n' && c /= '\r')
+  pure $
+    TemplateBindingAst
+      { bindingParamName = paramName
+      , bindingValueText = valueText
+      }
+
+parseIndentedBlockText :: Int -> Parser String
+parseIndentedBlockText width =
+  concat <$> some (try parseIndentedLine <|> parseEmptyLine)
+  where
+    parseIndentedLine = do
+      indent width
+      content <- takeWhileP Nothing (\c -> c /= '\n' && c /= '\r')
+      newline <- optional eol
+      pure (content ++ maybe "" (const "\n") newline)
+
+    parseEmptyLine = do
+      _ <- optional (many (char ' '))
+      _ <- eol
+      pure "\n"
+
+topBlockToTopForm :: TopBlock -> TopFormAst
+topBlockToTopForm topBlock =
+  case topBlock of
+    TopParties parties -> TopFormParties parties
+    TopObjects objects -> TopFormObjects objects
+    TopVocabulary vocabulary -> TopFormVocabulary vocabulary
+    TopArticle article -> TopFormArticle article
+    TopScenario scenario -> TopFormScenario scenario
+
+templateTopBlockToBodyForm :: TemplateTopBlock -> TemplateBodyFormAst
+templateTopBlockToBodyForm templateBlock =
+  case templateBlock of
+    TemplateBlock topBlock ->
+      case topBlock of
+        TopParties parties -> TemplateBodyParties parties
+        TopObjects objects -> TemplateBodyObjects objects
+        TopVocabulary vocabulary -> TemplateBodyVocabulary vocabulary
+        TopArticle article -> TemplateBodyArticle article
+        TopScenario scenario -> TemplateBodyScenario scenario
+    TemplateInstantiateBlock instantiation ->
+      TemplateBodyInstantiate instantiation
 
 parseDay :: String -> Maybe Day
 parseDay raw =

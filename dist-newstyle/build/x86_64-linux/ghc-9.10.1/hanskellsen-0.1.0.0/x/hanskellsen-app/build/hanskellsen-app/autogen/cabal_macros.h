@@ -30,6 +30,26 @@
   (major1) == 0 && (major2) <  7 || \
   (major1) == 0 && (major2) == 7 && (minor) <= 0)
 #endif /* MIN_VERSION_containers */
+/* package directory-1.3.8.3 */
+#ifndef VERSION_directory
+#define VERSION_directory "1.3.8.3"
+#endif /* VERSION_directory */
+#ifndef MIN_VERSION_directory
+#define MIN_VERSION_directory(major1,major2,minor) (\
+  (major1) <  1 || \
+  (major1) == 1 && (major2) <  3 || \
+  (major1) == 1 && (major2) == 3 && (minor) <= 8)
+#endif /* MIN_VERSION_directory */
+/* package filepath-1.5.2.0 */
+#ifndef VERSION_filepath
+#define VERSION_filepath "1.5.2.0"
+#endif /* VERSION_filepath */
+#ifndef MIN_VERSION_filepath
+#define MIN_VERSION_filepath(major1,major2,minor) (\
+  (major1) <  1 || \
+  (major1) == 1 && (major2) <  5 || \
+  (major1) == 1 && (major2) == 5 && (minor) <= 2)
+#endif /* MIN_VERSION_filepath */
 /* package hanskellsen-0.1.0.0 */
 #ifndef VERSION_hanskellsen
 #define VERSION_hanskellsen "0.1.0.0"

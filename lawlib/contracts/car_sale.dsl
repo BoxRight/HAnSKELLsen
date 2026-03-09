@@ -1,23 +1,13 @@
-law CarSale
+law CarSaleRefinement
 authority private
 enacted 2025-03-01
 
-vocabulary
-    verb deliver: deliver
-    verb delivery: deliver
-    verb pay: pay
+import "../statutes/sales.dsl"
 
-parties
-    Seller: Alice Corp
-    Buyer: Bob
-
-objects
-    Car: movable
-    Price: money
-
-article 1 Exchange
-    obligation Seller must deliver Car to Buyer.
+article 9 Exchange Refinement
+    obligation Buyer must pay Price to Seller.
     claim Seller may demand pay of Price from Buyer.
+    privilege Buyer may pay Price to Seller.
     procedure Closing:
-        Seller delivers Car to Buyer.
+        Seller delivers Goods to Buyer.
         Buyer pays Price to Seller.

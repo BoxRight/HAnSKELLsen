@@ -16,7 +16,9 @@ library
     , Compiler.AST
     , Compiler.SymbolTable
     , Compiler.Parser
+    , Compiler.Imports
     , Compiler.Compiler
+    , Compiler.Templates
     , Compiler.Scenario
     , Pretty.PrettyNorm
     , Pretty.PrettyTrace
@@ -27,6 +29,8 @@ library
   build-depends:
       base >=4.14 && <5
     , containers
+    , directory
+    , filepath
     , megaparsec
     , time
   default-language:    Haskell2010
@@ -37,6 +41,8 @@ executable hanskellsen-app
   build-depends:
       base >=4.14 && <5
     , containers
+    , directory
+    , filepath
     , megaparsec
     , time
     , hanskellsen

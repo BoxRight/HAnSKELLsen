@@ -86,16 +86,19 @@ data ClauseResult
 compileLawModule :: LawModuleAst -> Either [Diagnostic] CompiledLawModule
 compileLawModule lawModule = do
   symbols <- buildSymbolTable lawModule
-  let meta = lawMeta lawModule
-      clauses = concatMap articleClauses (lawArticles lawModule)
-      results = map (compileClause meta symbols) clauses
+  let sourcedClauses =
+        [ (sourceMeta sourcedArticle, clause)
+        | sourcedArticle <- lawArticles lawModule
+        , clause <- articleClauses (sourcePayload sourcedArticle)
+        ]
+      results = map (\(meta, clause) -> compileClause meta symbols clause) sourcedClauses
       diagnostics = gatherErrors results
       payloads = gatherValues results
   case diagnostics of
     [] ->
       Right $
         CompiledLawModule
-          { compiledMetadata = meta
+          { compiledMetadata = lawMeta lawModule
           , compiledFacts = mapMaybe extractFact payloads
           , compiledInstitutionalFacts =
               S.fromList (mapMaybe extractInstitutionalFact payloads)

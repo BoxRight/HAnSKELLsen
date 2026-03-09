@@ -2,8 +2,10 @@ module Main where
 
 import Compiler.AST (lawEnactedAst)
 import Compiler.Compiler
+import Compiler.Imports
 import Compiler.Parser
 import Compiler.Scenario
+import Compiler.Templates
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Time.Calendar (Day, fromGregorianValid)
@@ -15,7 +17,7 @@ import Text.Megaparsec (errorBundlePretty)
 import qualified Data.Map.Strict as M
 
 defaultInputPath :: FilePath
-defaultInputPath = "lawlib/statutes/sales.dsl"
+defaultInputPath = "lawlib/instantiations/composed_lease_regime.dsl"
 
 main :: IO ()
 main = do
@@ -26,22 +28,32 @@ main = do
   case parseLawFile inputPath input of
     Left bundle ->
       die (errorBundlePretty bundle)
-    Right lawModule ->
-      case compileLawModule lawModule of
-        Left diagnostics ->
-          die (unlines (map show diagnostics))
-        Right compiled -> do
-          case compileScenarios lawModule of
-            Left diagnostics ->
-              die (unlines (map show diagnostics))
-            Right scenarios -> do
-              auditDay <-
-                either die pure (resolveAuditDay compiled scenarios options)
-              case runAudit compiled scenarios (cliScenarioName options) auditDay of
-                Left err ->
-                  die err
-                Right auditResult ->
-                  putStrLn (generateAuditReport compiled auditResult)
+    Right surfaceLawModule ->
+      do
+        resolvedImports <- resolveImports surfaceLawModule
+        case resolvedImports of
+          Left diagnostics ->
+            die (unlines (map show diagnostics))
+          Right composedSurfaceLaw ->
+            case expandTemplates composedSurfaceLaw of
+              Left diagnostics ->
+                die (unlines (map show diagnostics))
+              Right lawModule ->
+                case compileLawModule lawModule of
+                  Left diagnostics ->
+                    die (unlines (map show diagnostics))
+                  Right compiled -> do
+                    case compileScenarios lawModule of
+                      Left diagnostics ->
+                        die (unlines (map show diagnostics))
+                      Right scenarios -> do
+                        auditDay <-
+                          either die pure (resolveAuditDay compiled scenarios options)
+                        case runAudit compiled scenarios (cliScenarioName options) auditDay of
+                          Left err ->
+                            die err
+                          Right auditResult ->
+                            putStrLn (generateAuditReport compiled auditResult)
 
 data CliOptions = CliOptions
   { cliInputPath :: Maybe FilePath
