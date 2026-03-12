@@ -1,0 +1,692 @@
+[
+  {
+    "source": {
+      "file_name": "TMX_1120572_es.txt",
+      "document_id": "TMX1120572",
+      "date": "2024-01-29",
+      "legal_refs": ["CCF:1949", "CCF:1950", "CCF:2846", "CCF:2847", "CCF:2848"]
+    },
+    "metadata": {
+      "contract_type": "Arrendamiento",
+      "classification": {
+        "obligations": "Bilateral",
+        "economic": "Oneroso",
+        "perfection": "Formal",
+        "execution": "Sucesivo",
+        "dependence": "Principal",
+        "certainty": "Conmutativo"
+      }
+    },
+
+    "_ontology_guide": {
+      "level_0": "Base entities: Person, Thing, Service",
+      "level_1_facts": "2-arg predicates: states/conditions between persons (no object mediates)",
+      "level_1_acts": "3-arg predicates: volitional actions with object between persons",
+      "level_2_templates": "Higher-order rules that take predicates as parameters",
+      "level_3_institution": "Highest-order: composes templates and rules into contract"
+    },
+
+    "roles": {
+      "arrendador": {
+        "type": "Person",
+        "subtype": "physical",
+        "attributes": {
+          "capacity": "exercise",
+          "domicilio_notificaciones": "___DOMICILIO_ARRENDADOR___",
+          "es_propietario": true
+        },
+        "declarations": ["capacidad_juridica", "propietario_inmueble"]
+      },
+      "arrendatario": {
+        "type": "Person",
+        "subtype": "physical",
+        "attributes": {
+          "capacity": "exercise",
+          "domicilio_notificaciones": "inmueble_arrendado"
+        },
+        "declarations": ["facultades_obligarse", "recibe_inmueble_perfecto_estado"]
+      },
+      "fiador": {
+        "type": "Person",
+        "subtype": "physical",
+        "attributes": {
+          "capacity": "exercise",
+          "capacidad_economica": true,
+          "domicilio_notificaciones": "___DOMICILIO_FIADOR___",
+          "inmueble_garantia": {
+            "ubicacion": "___UBICACION_INMUEBLE_FIADOR___",
+            "escritura_publica": "___NUMERO_ESCRITURA___",
+            "fecha_escritura": "___FECHA_ESCRITURA___",
+            "notario": "___NOMBRE_NOTARIO___",
+            "registro_publico": "___FOLIO_REGISTRO___",
+            "libre_gravamenes": true,
+            "al_corriente_impuestos": true
+          }
+        },
+        "declarations": ["persona_fisica_mayor_edad", "propietario_inmueble_garantia", "compromiso_no_enajenar"]
+      }
+    },
+
+    "objects": {
+      "_comment": "Level 0: Only actual Things/Services that are transferred or affected in Acts",
+      
+      "inmueble": {
+        "type": "Thing",
+        "subtype": "non-movable",
+        "attributes": {
+          "ubicacion": "___DIRECCION_INMUEBLE___",
+          "codigo_postal": "___CP___",
+          "purpose": "habitacion",
+          "estado": "perfecto",
+          "servicios_sanitarios": "perfecto_estado"
+        }
+      },
+      "renta_mensual": {
+        "type": "Thing",
+        "subtype": "expendable",
+        "attributes": {
+          "monto": "___MONTO_RENTA___",
+          "monto_letra": "___MONTO_RENTA_LETRA___",
+          "moneda": "MXN",
+          "periodicidad": "mensual",
+          "forma_pago": "adelantado",
+          "indivisible": true,
+          "mes_forzoso": true
+        }
+      },
+      "deposito_garantia": {
+        "type": "Thing",
+        "subtype": "expendable",
+        "attributes": {
+          "monto": "___MONTO_DEPOSITO___",
+          "monto_letra": "___MONTO_DEPOSITO_LETRA___",
+          "moneda": "MXN",
+          "condicion_devolucion": "desocupe_sin_deudas"
+        }
+      },
+      "plazo_arrendamiento": {
+        "type": "Service",
+        "subtype": "positive",
+        "attributes": {
+          "duracion": "___DURACION___",
+          "inicio": "2024-01-29",
+          "fin": "2025-01-29",
+          "tipo": "determinado",
+          "aviso_terminacion_dias": "___DIAS_AVISO___",
+          "terminacion_automatica": true,
+          "sin_necesidad_desahucio": true
+        }
+      }
+    },
+
+    "behaviors": {
+      "_comment": "Level 1: Predicates classified as Facts (2-arg) or Acts (3-arg)",
+
+      "acts": {
+        "_comment": "3-argument predicates: Person → Object → Person",
+
+        "pago_renta": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendatario", "renta_mensual", "arrendador"],
+          "description": "El arrendatario pagará al arrendador la renta mensual pactada, íntegra e indivisible.",
+          "source_clauses": ["Primera", "Segunda"]
+        },
+        "conceda_el_uso": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendador", "inmueble", "arrendatario"],
+          "description": "El arrendador concede el uso del inmueble al arrendatario.",
+          "implicit": true
+        },
+        "devuelva_el_inmueble": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendatario", "inmueble", "arrendador"],
+          "description": "El arrendatario devuelve el inmueble al arrendador al término del contrato.",
+          "source_clauses": ["Decimotercera"]
+        },
+        "entrega_deposito": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendatario", "deposito_garantia", "arrendador"],
+          "description": "El arrendatario entrega el depósito de garantía al arrendador.",
+          "source_clauses": ["Décima primera"]
+        },
+        "devolucion_deposito": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendador", "deposito_garantia", "arrendatario"],
+          "description": "El arrendador devuelve el depósito cuando el arrendatario desocupe sin deudas.",
+          "source_clauses": ["Décima primera"]
+        },
+        "garantice_pago": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["fiador", "renta_mensual", "arrendador"],
+          "description": "El fiador garantiza solidariamente el pago de las obligaciones del arrendatario.",
+          "source_clauses": ["Décima segunda"]
+        },
+        "conserve_inmueble": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendatario", "inmueble", "arrendador"],
+          "description": "El arrendatario conserva el inmueble en el estado en que lo recibió.",
+          "source_clauses": ["Décima"]
+        },
+        "haga_mejoras": {
+          "level": "act",
+          "arity": 3,
+          "signature": ["arrendatario", "inmueble", "arrendador"],
+          "description": "El arrendatario realiza mejoras al inmueble (requiere permiso escrito).",
+          "source_clauses": ["Sexta"]
+        }
+      },
+
+      "facts": {
+        "_comment": "2-argument predicates: Person ↔ Person (states/conditions)",
+
+        "contrato_vigente": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendador", "arrendatario"],
+          "description": "Estado: el contrato está en vigor entre las partes."
+        },
+        "es_fiador_solidario": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["fiador", "arrendatario"],
+          "description": "El fiador es garante solidario del arrendatario.",
+          "source_clauses": ["Décima segunda"]
+        },
+        "tiene_capacidad_juridica": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendador", "arrendatario"],
+          "description": "Las partes tienen capacidad jurídica para contratar.",
+          "source_clauses": ["Declaración I.a", "Declaración II.a"]
+        },
+        "sin_vicios_consentimiento": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendador", "arrendatario"],
+          "description": "No existe dolo, error, mala fe ni vicios de la voluntad.",
+          "source_clauses": ["Declaración IV.a"]
+        },
+        "reconoce_personalidad": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendador", "arrendatario"],
+          "description": "Las partes se reconocen mutuamente la personalidad con que comparecen.",
+          "source_clauses": ["Declaración IV.b"]
+        },
+        "incumplimiento": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendatario", "arrendador"],
+          "description": "Estado de incumplimiento del arrendatario hacia el arrendador."
+        },
+        "vencido_plazo": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendador", "arrendatario"],
+          "description": "El plazo del contrato ha vencido.",
+          "source_clauses": ["Tercera", "Decimotercera"]
+        }
+      },
+
+      "fact_predicates_for_prohibitions": {
+        "_comment": "These are fact-predicates that are subjects of forbid() - NOT Things",
+
+        "almacene_sustancias_peligrosas": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendatario", "inmueble"],
+          "description": "El arrendatario tiene/almacena sustancias peligrosas en el inmueble.",
+          "source_clauses": ["Novena"],
+          "note": "This is a FACT (state), not a Thing. The template forbids this predicate."
+        },
+        "subarriende": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendatario", "inmueble"],
+          "description": "El arrendatario subarrienda el inmueble.",
+          "source_clauses": ["Cuarta"],
+          "note": "This is a FACT (state), not a Thing. The template forbids this predicate."
+        },
+        "retenga_renta": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendatario", "arrendador"],
+          "description": "El arrendatario retiene o descuenta la renta.",
+          "source_clauses": ["Octava"],
+          "note": "This is a FACT (state), not a Thing. The template forbids this predicate."
+        },
+        "use_para_otro_fin": {
+          "level": "fact",
+          "arity": 2,
+          "signature": ["arrendatario", "inmueble"],
+          "description": "El arrendatario usa el inmueble para fin distinto a habitación.",
+          "source_clauses": ["Séptima"],
+          "note": "This is a FACT (state), not a Thing. The template forbids this predicate."
+        }
+      }
+    },
+
+    "declarations": {
+      "_comment": "Declaraciones de las partes - these generate facts, not acts",
+      
+      "arrendador": [
+        {
+          "id": "capacidad_juridica",
+          "text": "Que cuenta con la capacidad jurídica suficiente para celebrar el presente contrato.",
+          "generates_fact": "tiene_capacidad_juridica"
+        },
+        {
+          "id": "propietario_inmueble",
+          "text": "Que es propietario del inmueble ubicado en ___.",
+          "generates_fact": null,
+          "sets_attribute": "roles.arrendador.es_propietario"
+        }
+      ],
+      "arrendatario": [
+        {
+          "id": "facultades_obligarse",
+          "text": "Que tiene las facultades suficientes y bastantes para obligarse en términos del presente instrumento.",
+          "generates_fact": "tiene_capacidad_juridica"
+        },
+        {
+          "id": "recibe_inmueble_perfecto_estado",
+          "text": "Que tiene interés en recibir en arrendamiento el inmueble... se encuentra en las condiciones necesarias de seguridad, higiene y salubridad.",
+          "generates_fact": null,
+          "sets_attribute": "objects.inmueble.estado"
+        }
+      ],
+      "fiador": [
+        {
+          "id": "persona_fisica_mayor_edad",
+          "text": "Ser una persona física, mayor de edad y con capacidad económica para fungir como fiador.",
+          "generates_fact": "es_fiador_solidario"
+        },
+        {
+          "id": "propietario_inmueble_garantia",
+          "text": "Ser propietario del bien inmueble ubicado en ___ según consta en la escritura pública número ___.",
+          "generates_fact": null,
+          "sets_attribute": "roles.fiador.inmueble_garantia"
+        },
+        {
+          "id": "compromiso_no_enajenar",
+          "text": "Obligándose a no enajenar, traspasar, ceder o comprometerse con terceros durante el tiempo que dure la relación contractual.",
+          "generates_fact": null,
+          "constraint": true
+        }
+      ],
+      "partes": [
+        {
+          "id": "no_vicios_consentimiento",
+          "text": "Que en el presente contrato no existe dolo, error, mala fe o cualquier otro vicio de la voluntad.",
+          "generates_fact": "sin_vicios_consentimiento"
+        },
+        {
+          "id": "reconocimiento_personalidad",
+          "text": "Que se reconocen la personalidad con la que comparecen a la celebración de este contrato.",
+          "generates_fact": "reconoce_personalidad"
+        }
+      ]
+    },
+
+    "principal_act_ref": "pago_renta",
+
+    "principal_contract": {
+      "normative_clauses": [
+        {
+          "id": "clause_pago_renta",
+          "source_clause": "Primera",
+          "text": "El arrendatario pagará al arrendador la renta mensual pactada, íntegra e indivisible.",
+          "form": "implies",
+          "antecedent": { "fact": "contrato_vigente" },
+          "consequent": { "deontic": "oblig", "act": "pago_renta" }
+        },
+        {
+          "id": "clause_mes_forzoso",
+          "source_clause": "Segunda",
+          "text": "Todo mes de arrendamiento le es forzoso y lo pagará íntegro aun cuando únicamente ocupe la localidad un solo día.",
+          "form": "constraint",
+          "constraint": "renta_mensual.periodicidad == 'mensual'"
+        },
+        {
+          "id": "clause_plazo",
+          "source_clause": "Tercera",
+          "text": "El término del arrendamiento será de ___.",
+          "form": "definition",
+          "defines": "plazo_arrendamiento"
+        },
+        {
+          "id": "clause_prohibicion_subarrendamiento",
+          "source_clause": "Cuarta",
+          "text": "Queda expresamente prohibido traspasar o subarrendar todo o parte del inmueble arrendado.",
+          "form": "implies",
+          "antecedent": { "fact": "contrato_vigente" },
+          "consequent": { "deontic": "forbid", "fact_predicate": "subarriende" }
+        },
+        {
+          "id": "clause_recepcion_inmueble",
+          "source_clause": "Quinta",
+          "text": "El arrendatario declara haber recibido el inmueble en perfecto estado.",
+          "form": "declaration",
+          "generates_fact": "recepcion_inmueble"
+        },
+        {
+          "id": "clause_mejoras",
+          "source_clause": "Sexta",
+          "text": "Cualquier mejora que hiciere el arrendatario queda a beneficio de la finca y requiere permiso escrito del arrendador.",
+          "form": "implies",
+          "antecedent": { "act": "haga_mejoras" },
+          "consequent": { "effect": "beneficio_finca" },
+          "constraint": "requires_written_permission"
+        },
+        {
+          "id": "clause_uso_habitacional",
+          "source_clause": "Séptima",
+          "text": "El arrendatario hará uso del inmueble únicamente para habitación.",
+          "form": "implies",
+          "antecedent": { "fact": "contrato_vigente" },
+          "consequent": { "deontic": "forbid", "fact_predicate": "use_para_otro_fin" },
+          "rescission_trigger": true
+        },
+        {
+          "id": "clause_prohibicion_retencion",
+          "source_clause": "Octava",
+          "text": "El inquilino no podrá retener ni descontar de la renta cantidad alguna.",
+          "form": "implies",
+          "antecedent": { "fact": "contrato_vigente" },
+          "consequent": { "deontic": "forbid", "fact_predicate": "retenga_renta" }
+        },
+        {
+          "id": "clause_prohibicion_sustancias",
+          "source_clause": "Novena",
+          "text": "No podrá tener substancias corrosivas, materias inflamables o peligrosas.",
+          "form": "standalone_forbid",
+          "consequent": { "deontic": "forbid", "fact_predicate": "almacene_sustancias_peligrosas" }
+        },
+        {
+          "id": "clause_conservacion",
+          "source_clause": "Décima",
+          "text": "El arrendatario recibe el inmueble con todo el servicio sanitario en perfecto estado y se compromete a conservarlo.",
+          "form": "implies",
+          "antecedent": { "fact": "contrato_vigente" },
+          "consequent": { "deontic": "oblig", "act": "conserve_inmueble" }
+        },
+        {
+          "id": "clause_deposito_garantia",
+          "source_clause": "Décima primera",
+          "text": "Para garantizar el cumplimiento de este contrato entregará el inquilino la cantidad de $___ la cual se devolverá cuando desocupe.",
+          "form": "implies",
+          "antecedent": { "fact": "contrato_vigente" },
+          "consequent": { "deontic": "oblig", "act": "entrega_deposito" },
+          "conditional_return": {
+            "condition": "desocupe_sin_deudas",
+            "act": "devolucion_deposito"
+          }
+        },
+        {
+          "id": "clause_fiador",
+          "source_clause": "Décima segunda",
+          "text": "Firma este contrato ___ como fiador solidario del inquilino.",
+          "form": "implies",
+          "antecedent": { "fact": "es_fiador_solidario" },
+          "consequent": { "deontic": "oblig", "act": "garantice_pago" }
+        },
+        {
+          "id": "clause_terminacion",
+          "source_clause": "Decimotercera",
+          "text": "Cuando el contrato se haya celebrado por tiempo determinado, concluye el día prefijado sin necesidad de desahucio.",
+          "form": "implies",
+          "antecedent": { "fact": "vencido_plazo" },
+          "consequent": { "effect": "terminacion_contrato" }
+        }
+      ],
+
+      "templates": {
+        "_comment": "Level 2: Higher-order rules that take predicates as parameters",
+
+        "fianza_solidaria": {
+          "laml_ref": "laws/principles/fianza.laml",
+          "description": "Fianza solidaria - el fiador garantiza el cumplimiento de la obligación principal",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "principal_act": {
+              "type": "predicate",
+              "binds_to": "pago_renta",
+              "note": "The act whose non-performance triggers the guarantee"
+            },
+            "garantice_pred": {
+              "type": "predicate",
+              "binds_to": "garantice_pago",
+              "note": "The act of the guarantor guaranteeing payment"
+            }
+          }
+        },
+        "deposito_en_garantia": {
+          "laml_ref": "laws/principles/deposito_en_garantia.laml",
+          "description": "Depósito en garantía para asegurar cumplimiento (standalone obligation at contract formation)",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "entregue_deposito_pred": {
+              "type": "predicate",
+              "binds_to": "entrega_deposito",
+              "note": "Standalone obligation - due at contract formation"
+            },
+            "devuelva_inmueble_pred": {
+              "type": "predicate",
+              "binds_to": "devuelva_el_inmueble"
+            },
+            "pague_renta_pred": {
+              "type": "predicate",
+              "binds_to": "pago_renta"
+            },
+            "devuelva_deposito_pred": {
+              "type": "predicate",
+              "binds_to": "devolucion_deposito"
+            },
+            "compense_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_compense_deposito"
+            }
+          }
+        },
+        "uso_habitacional_exclusivo": {
+          "laml_ref": "laws/principles/uso_habitacion.laml",
+          "description": "Restricción de uso exclusivo para habitación",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "conceda_uso_pred": {
+              "type": "predicate",
+              "binds_to": "conceda_el_uso"
+            },
+            "use_habitacion_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_use_para_habitacion"
+            },
+            "use_otro_fin_pred": {
+              "type": "predicate",
+              "binds_to": "use_para_otro_fin",
+              "note": "This is a fact-predicate that gets forbidden"
+            }
+          }
+        },
+        "rescision_por_incumplimiento": {
+          "laml_ref": "laws/principles/rescision_incumplimiento.laml",
+          "description": "Poder de rescisión en caso de incumplimiento",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "principal_act": {
+              "type": "predicate",
+              "binds_to": "pago_renta"
+            },
+            "declare_rescision_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_declare_rescision"
+            },
+            "devuelva_pred": {
+              "type": "predicate",
+              "binds_to": "devuelva_el_inmueble"
+            }
+          }
+        },
+        "ConservacionInmueble": {
+          "laml_ref": "laws/principles/ConservacionInmueble.laml",
+          "description": "Obligación de conservar el inmueble en buen estado",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "conceda_uso_pred": {
+              "type": "predicate",
+              "binds_to": "conceda_el_uso"
+            },
+            "conserve_pred": {
+              "type": "predicate",
+              "binds_to": "conserve_inmueble"
+            },
+            "mantenga_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_mantenga_inmueble"
+            },
+            "deterioro_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_cause_deterioro"
+            },
+            "repare_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_repare_deterioro",
+              "note": "Obligation to repair if tenant causes deterioration"
+            }
+          }
+        },
+        "prohibicion_subarrendamiento": {
+          "laml_ref": "laws/principles/subarrendamiento.laml",
+          "description": "Prohibición de subarrendar el inmueble",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "conceda_el_uso_pred": {
+              "type": "predicate",
+              "binds_to": "conceda_el_uso"
+            },
+            "subarriende_pred": {
+              "type": "predicate",
+              "binds_to": "subarriende",
+              "note": "This is a fact-predicate (2-arg) that gets forbidden"
+            }
+          }
+        },
+        "prohibicion_retencion_renta": {
+          "laml_ref": "laws/principles/retencion.laml",
+          "description": "Prohibición de retener o descontar la renta (standalone prohibition)",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "retenga_pred": {
+              "type": "predicate",
+              "binds_to": "retenga_renta",
+              "note": "Standalone prohibition - tenant can never retain rent"
+            }
+          }
+        },
+        "prohibicion_sustancias_peligrosas": {
+          "laml_ref": "laws/principles/sustancias_peligrosas.laml",
+          "description": "Prohibición de almacenar sustancias peligrosas",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "almacene_pred": {
+              "type": "predicate",
+              "binds_to": "almacene_sustancias_peligrosas",
+              "note": "This is a fact-predicate (2-arg) that gets forbidden - NOT a Thing!"
+            }
+          }
+        },
+        "DanosYPerjuiciosInmuebles": {
+          "laml_ref": "laws/principles/danos_y_perjuicios.laml",
+          "description": "Daños y perjuicios por incumplimiento sobre bien inmueble",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "obligacion": {
+              "type": "predicate",
+              "binds_to": "devuelva_el_inmueble",
+              "note": "The act whose non-performance triggers damages"
+            },
+            "reparacion_dano": {
+              "type": "predicate",
+              "binds_to": "_generated_repare_dano"
+            },
+            "reparacion_perjuicio": {
+              "type": "predicate",
+              "binds_to": "_generated_repare_perjuicio"
+            },
+            "deudor": {
+              "type": "role",
+              "binds_to": "arrendatario"
+            },
+            "acreedor": {
+              "type": "role",
+              "binds_to": "arrendador"
+            }
+          }
+        },
+        "MejorasBeneficioFinca": {
+          "laml_ref": "laws/principles/mejoras_beneficio_finca.laml",
+          "description": "Las mejoras quedan en beneficio de la finca (CCF 2423)",
+          "level": "template",
+          "takes_predicates": true,
+          "parameters": {
+            "conceda_uso_pred": {
+              "type": "predicate",
+              "binds_to": "conceda_el_uso"
+            },
+            "haga_mejoras_pred": {
+              "type": "predicate",
+              "binds_to": "haga_mejoras"
+            },
+            "retire_mejoras_pred": {
+              "type": "predicate",
+              "binds_to": "_generated_retire_mejoras",
+              "note": "Act of removing improvements - forbidden by this template"
+            }
+          }
+        }
+      }
+    },
+
+    "accessory_contracts": [],
+
+    "institution": {
+      "name": "ArrendamientoHabitacional",
+      "ref": "laws/contracts/arrendamiento.laml",
+      "extends": null,
+      "level": "institution",
+      "note": "Level 3: Highest-order act - the contract itself"
+    },
+
+    "derived_institution": {
+      "name": "arrendamiento_TMX1120572",
+      "ref": "laws/contracts/arrendamiento_TMX1120572.laml",
+      "extends": "ArrendamientoHabitacional",
+      "level": "institution",
+      "note": "Composed institution that extends base with templates"
+    },
+
+    "principles": [
+      "PactaSuntServanda",
+      "BuenaFeContractual",
+      "NoEnriquecimientoIlicito",
+      "EquilibrioContractual",
+      "ProhibicionAbusoDerecho"
+    ]
+  }
+]

@@ -1,0 +1,83 @@
+[
+    {
+        "source": {
+            "file_name": "minimal_test.json",
+            "document_id": "MIN001",
+            "date": "2025-01-01",
+            "legal_refs": []
+        },
+        "metadata": {
+            "contract_type": "TestContract",
+            "classification": {}
+        },
+        "institution": {
+            "name": "MinimalLease",
+            "authority": "private"
+        },
+        "roles": {
+            "lessor": {
+                "type": "Person",
+                "subtype": "physical",
+                "attributes": {
+                    "capacity": "exercise"
+                }
+            },
+            "lessee": {
+                "type": "Person",
+                "subtype": "physical",
+                "attributes": {
+                    "capacity": "exercise"
+                }
+            }
+        },
+        "objects": {
+            "rent": {
+                "type": "Thing",
+                "subtype": "expendable",
+                "attributes": {}
+            }
+        },
+        "behaviors": {
+            "acts": {
+                "pay_rent": {
+                    "level": "act",
+                    "arity": 3,
+                    "signature": [
+                        "lessee",
+                        "rent",
+                        "lessor"
+                    ],
+                    "description": "Lessee pays rent to lessor."
+                }
+            },
+            "facts": {
+                "contract_active": {
+                    "level": "fact",
+                    "arity": 2,
+                    "signature": [
+                        "lessor",
+                        "lessee"
+                    ],
+                    "description": "Contract is active."
+                }
+            }
+        },
+        "declarations": {},
+        "principal_contract": {
+            "normative_clauses": [
+                {
+                    "id": "clause_pay",
+                    "form": "implies",
+                    "antecedent": {
+                        "fact": "contract_active"
+                    },
+                    "consequent": {
+                        "deontic": "oblig",
+                        "act": "pay_rent"
+                    }
+                }
+            ],
+            "templates": {}
+        }
+    }
+]

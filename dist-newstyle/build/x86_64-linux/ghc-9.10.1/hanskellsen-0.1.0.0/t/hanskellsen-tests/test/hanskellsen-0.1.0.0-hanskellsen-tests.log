@@ -1,3 +1,3 @@
 Test suite hanskellsen-tests: RUNNING...
-Test suite hanskellsen-tests: PASS
+Test suite hanskellsen-tests: FAIL
 Test suite logged to: /home/maitreya/HAnSKELLsen/./dist-newstyle/build/x86_64-linux/ghc-9.10.1/hanskellsen-0.1.0.0/t/hanskellsen-tests/test/hanskellsen-0.1.0.0-hanskellsen-tests.log

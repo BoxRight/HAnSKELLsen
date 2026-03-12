@@ -2,6 +2,7 @@ module Main where
 
 import Compiler.AST (lawEnactedAst)
 import Compiler.Compiler
+import Compiler.IRToDSL (irToDSL, irToDSLWithWarnings, IrDocument)
 import Runtime.QuantaleAnalysis
   ( QuantaleOptions(..)
   , generateQuantaleReportWith
@@ -14,7 +15,9 @@ import Compiler.Imports
 import Compiler.Parser
 import Compiler.Scenario
 import Compiler.Templates
+import Data.Aeson (eitherDecode)
 import Data.ByteString.Lazy (ByteString, hPut)
+import qualified Data.ByteString.Lazy as LBS
 import Data.ByteString.Lazy.Char8 (unpack)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
@@ -24,7 +27,7 @@ import Runtime.Audit
 import Runtime.AuditJson
 import Runtime.DerivationGraph
 import System.Environment (getArgs)
-import System.IO (stdout)
+import System.IO (stdout, hPutStrLn, stderr)
 import System.Exit (die)
 import Text.Megaparsec (errorBundlePretty)
 import qualified Data.Map.Strict as M
@@ -43,7 +46,8 @@ main = do
   args <- getArgs
   case args of
     ("quantale" : rest) -> runQuantaleMode rest
-    _ -> runAuditMode args
+    ("ir" : rest)       -> runIrMode rest
+    _                   -> runAuditMode args
 
 runQuantaleMode :: [String] -> IO ()
 runQuantaleMode args = do
@@ -111,6 +115,41 @@ runQuantaleQuery compiled scenarios opts
       violationPathsReport compiled scenarios
   | otherwise =
       generateQuantaleReportWith compiled scenarios opts
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- IR MODE
+-- ─────────────────────────────────────────────────────────────────────────────
+
+runIrMode :: [String] -> IO ()
+runIrMode args = do
+  (inputPath, mOutputPath) <- either die pure (parseIrOptions args)
+  raw <- LBS.readFile inputPath
+  case eitherDecode raw :: Either String [IrDocument] of
+    Left err -> die ("IR JSON decode error: " ++ err)
+    Right []  -> die "IR JSON: empty array"
+    Right (doc:_) -> do
+      let (dslText, warnings) = irToDSLWithWarnings doc
+      mapM_ (\w -> hPutStrLn stderr ("-- " ++ w)) warnings
+      case mOutputPath of
+        Nothing   -> putStr dslText
+        Just path -> writeFile path dslText
+
+parseIrOptions :: [String] -> Either String (FilePath, Maybe FilePath)
+parseIrOptions args =
+  go Nothing Nothing args
+  where
+    go (Just inp) mOut [] = Right (inp, mOut)
+    go Nothing _ [] = Left "ir mode requires an input JSON file"
+    go inp _ ("-o" : path : rest) = go inp (Just path) rest
+    go inp _ ("-o" : []) = Left "-o requires a file path"
+    go Nothing mOut (arg : rest)
+      | "--" `isPrefixOf` arg = Left ("unknown ir option `" ++ arg ++ "`")
+      | otherwise = go (Just arg) mOut rest
+    go (Just _) _ (arg : _) = Left ("unexpected extra argument `" ++ arg ++ "`")
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- AUDIT MODE
+-- ─────────────────────────────────────────────────────────────────────────────
 
 runAuditMode :: [String] -> IO ()
 runAuditMode args = do

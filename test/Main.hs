@@ -7,6 +7,7 @@ import TestImportMetadata (importMetadataTests)
 import TestBenchmark (benchmarkTests)
 import TestInstitutionalSemantics (institutionalSemanticsTests)
 import TestIntrinsics (intrinsicTests)
+import TestIRToDSL (tests)
 
 main :: IO ()
 main =
@@ -18,4 +19,5 @@ main =
       , benchmarkTests
       , institutionalSemanticsTests
       , intrinsicTests
+      , tests
       ]
