@@ -2,19 +2,23 @@ module Compiler.SymbolTable
   ( Diagnostic(..)
   , SymbolTable(..)
   , buildSymbolTable
+  , canonicalVerbRegistry
+  , isCanonicalVerbInRegistry
   , normalizeSymbolKey
   , normalizeVerbToken
+  , resolveFactDecl
   , resolveObjectDecl
   , resolveObjectVocabulary
   , resolvePartyDecl
   , resolveVerbCanonical
   ) where
 
-import Compiler.AST
+import Compiler.AST as AST
 import Data.Char (isAlphaNum, toLower)
 import Data.Function (on)
 import Data.List (foldl', intercalate, sortBy)
 import qualified Data.Map.Strict as M
+import qualified Data.Set as S
 
 data Diagnostic = Diagnostic
   { diagnosticContext :: String
@@ -31,6 +35,7 @@ data SymbolTable = SymbolTable
   , objectSymbols :: M.Map String ObjectDecl
   , verbSymbols :: M.Map String String
   , objectVocabularySymbols :: M.Map String String
+  , factSymbols :: M.Map String AST.FactDecl
   }
   deriving (Eq, Show)
 
@@ -46,6 +51,37 @@ normalizeVerbToken raw =
   where
     normalized = normalizeSymbolKey raw
 
+-- | Default set of canonical verbs. Extensible; vocabulary may map surface verbs
+-- to these or to controlled extensions (e.g. collect, apply, maintain for
+-- usufruct/anticresis). baseVerbForObject outputs (transfer, deliver, perform,
+-- refrain from, refrain from interfering with) must align with registry.
+canonicalVerbRegistry :: S.Set String
+canonicalVerbRegistry =
+  S.fromList
+    [ "transfer"
+    , "pay"
+    , "deliver"
+    , "perform"
+    , "refrain"
+    , "refrain from"
+    , "refrain from interfering with"
+    , "collect"
+    , "apply"
+    , "maintain"
+    , "notify"
+    , "cancel"
+    , "damage"
+    ]
+
+-- | Normalized registry for lookup (handles spaces in multi-word verbs).
+canonicalVerbRegistryNormalized :: S.Set String
+canonicalVerbRegistryNormalized =
+  S.fromList (map normalizeSymbolKey (S.toList canonicalVerbRegistry))
+
+isCanonicalVerbInRegistry :: String -> Bool
+isCanonicalVerbInRegistry verb =
+  S.member (normalizeSymbolKey verb) canonicalVerbRegistryNormalized
+
 buildSymbolTable :: LawModuleAst -> Either [Diagnostic] SymbolTable
 buildSymbolTable lawModule =
   case sortDiagnostics diagnostics of
@@ -55,6 +91,7 @@ buildSymbolTable lawModule =
         , objectSymbols = objectMap
         , verbSymbols = verbMap
         , objectVocabularySymbols = objectVocabMap
+        , factSymbols = factMap
         }
     errs -> Left errs
   where
@@ -68,15 +105,20 @@ buildSymbolTable lawModule =
       [ (surface, canonical)
       | ObjectVocabulary surface canonical <- lawVocabulary lawModule
       ]
+    factEntries =
+      [ (factDeclName f, f)
+      | f <- lawFacts lawModule
+      ]
 
     (partyMap, partyDiags) = buildMap "parties" "party" partyEntries
     (objectMap, objectDiags) = buildMap "objects" "object" objectEntries
     (verbMap, verbDiags) = buildMap "vocabulary" "verb" verbEntries
     (objectVocabMap, objectVocabDiags) =
       buildMap "vocabulary" "object vocabulary entry" objectVocabEntries
+    (factMap, factDiags) = buildMap "facts" "fact" factEntries
 
     diagnostics =
-      partyDiags ++ objectDiags ++ verbDiags ++ objectVocabDiags
+      partyDiags ++ objectDiags ++ verbDiags ++ objectVocabDiags ++ factDiags
 
 buildMap
   :: String
@@ -114,6 +156,10 @@ resolveVerbCanonical table rawVerb =
 resolveObjectVocabulary :: SymbolTable -> String -> Maybe String
 resolveObjectVocabulary table rawName =
   M.lookup (normalizeSymbolKey rawName) (objectVocabularySymbols table)
+
+resolveFactDecl :: SymbolTable -> String -> Either Diagnostic AST.FactDecl
+resolveFactDecl table rawName =
+  lookupSymbol "facts" "fact" rawName (factSymbols table)
 
 lookupSymbol
   :: String

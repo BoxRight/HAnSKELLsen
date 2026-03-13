@@ -22,6 +22,7 @@ data TopBlock
   = TopParties [PartyDecl]
   | TopObjects [ObjectDecl]
   | TopVocabulary [VocabularyDecl]
+  | TopFacts [FactDecl]
   | TopArticle ArticleAst
   | TopScenario ScenarioAst
 
@@ -142,6 +143,7 @@ parseTopBlock =
     [ parseVocabularySection
     , parsePartiesSection
     , parseObjectsSection
+    , parseFactsSection
     , parseArticle
     , parseScenario
     ]
@@ -167,6 +169,27 @@ parseVocabularyLine = do
   hspace
   canonical <- trim <$> restOfLine
   pure (kind surface canonical)
+
+parseFactsSection :: Parser TopBlock
+parseFactsSection = do
+  _ <- chunk "facts"
+  endOfLineOrEof
+  entries <- some (try parseFactLine)
+  pure (TopFacts entries)
+
+parseFactLine :: Parser FactDecl
+parseFactLine = do
+  indent 4
+  name <- identifier
+  _ <- char ':'
+  hspace
+  kindStr <- trim <$> restOfLine
+  kind <-
+    case map toLower kindStr of
+      "numeric" -> pure NumericFactKind
+      "date" -> pure DateFactKind
+      _ -> fail ("unknown fact kind `" ++ kindStr ++ "` (use numeric or date)")
+  pure (FactDecl { factDeclName = name, factDeclKind = kind })
 
 parsePartiesSection :: Parser TopBlock
 parsePartiesSection = do
@@ -837,6 +860,7 @@ topBlockToTopForm topBlock =
     TopParties parties -> TopFormParties parties
     TopObjects objects -> TopFormObjects objects
     TopVocabulary vocabulary -> TopFormVocabulary vocabulary
+    TopFacts facts -> TopFormFacts facts
     TopArticle article -> TopFormArticle article
     TopScenario scenario -> TopFormScenario scenario
 
@@ -848,6 +872,7 @@ templateTopBlockToBodyForm templateBlock =
         TopParties parties -> TemplateBodyParties parties
         TopObjects objects -> TemplateBodyObjects objects
         TopVocabulary vocabulary -> TemplateBodyVocabulary vocabulary
+        TopFacts facts -> TemplateBodyFacts facts
         TopArticle article -> TemplateBodyArticle article
         TopScenario scenario -> TemplateBodyScenario scenario
     TemplateInstantiateBlock instantiation ->

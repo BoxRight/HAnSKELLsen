@@ -11,6 +11,7 @@ module Compiler.Compiler
   , compileInitialNorm
   , compileInitialSystemState
   , compileLawModule
+  , lintFactEventConfusion
   , resolveAction
   , resolveCondition
   , resolvedActionToAct
@@ -173,6 +174,59 @@ buildDisplayVerbMap lawModule symbols _payloads =
         ServiceSubtype (Performance Nothing) -> "perform"
         ServiceSubtype (Omission (Just _)) -> "refrain from interfering with"
         ServiceSubtype (Omission Nothing) -> "refrain from"
+
+-- | Lint-level check: warn if a rule condition references an event whose
+-- identifier overlaps with a declared fact (asset, liability, etc.), which may
+-- indicate confusion between contingent events and institutional state.
+lintFactEventConfusion :: LawModuleAst -> [Diagnostic]
+lintFactEventConfusion lawModule =
+  [ Diagnostic "lint:fact-event"
+      ("possible fact/event confusion: rule condition references `event " ++ eventId ++ "` or `natural event " ++ eventId ++ "` but there is also a fact (asset/liability/collateral/certification) named `" ++ eventId ++ "`")
+  | eventId <- eventIds
+  , not (null eventId)
+  , eventId `S.member` factIds
+  ]
+  where
+    factIds =
+      S.fromList
+        ( concatMap standingFactNames
+            [ clause
+            | sourced <- lawArticles lawModule
+            , clause <- articleClauses (sourcePayload sourced)
+            ]
+        )
+    eventIds =
+      S.toList
+        ( S.fromList
+            [ headWord (eventDescription ev)
+            | sourced <- lawArticles lawModule
+            , clause <- articleClauses (sourcePayload sourced)
+            , condition <- conditionsFromClause clause
+            , EventConditionAst ev <- [condition]
+            ]
+        )
+    conditionsFromClause clause =
+      case clause of
+        ClauseRule r -> conditionList (ruleConditionAst r)
+        ClauseOverride o -> conditionList (overrideConditionAst o)
+        ClauseSuspend s -> conditionList (suspendConditionAst s)
+        _ -> []
+    conditionList c =
+      case c of
+        ConditionConjunctionAst cs -> concatMap conditionList cs
+        other -> [other]
+    standingFactNames clause =
+      case clause of
+        ClauseStandingFact (AssetFactAst n) -> [n]
+        ClauseStandingFact (LiabilityFactAst n) -> [n]
+        ClauseStandingFact (CollateralFactAst n) -> [n]
+        ClauseStandingFact (CertificationFactAst n) -> [n]
+        _ -> []
+    eventDescription ev =
+      case ev of
+        HumanEventAst t -> t
+        NaturalEventAst t -> t
+    headWord s = case words s of [] -> ""; w : _ -> w
 
 compileInitialNorm :: LawModuleAst -> Either [Diagnostic] Norm
 compileInitialNorm lawModule = do
@@ -368,7 +422,9 @@ resolveCondition symbols conditionAst =
     EventConditionAst eventAst ->
       pure (ResolvedEventCondition (legalEventAstToEvent eventAst))
     IntrinsicConditionAst name args ->
-      pure (ResolvedIntrinsicPredicate name (map intrinsicArgAstToArg args))
+      validateIntrinsicArity name args >>= \() ->
+        validateIntrinsicFactRefs symbols args >>= \validatedArgs ->
+          pure (ResolvedIntrinsicPredicate name validatedArgs)
     ConditionConjunctionAst conditions ->
       ResolvedConjunction <$> mapM (resolveCondition symbols) conditions
 
@@ -378,6 +434,58 @@ intrinsicArgAstToArg arg =
     IntrinsicFactRef name -> ResolvedIntrinsicFactRef name
     IntrinsicNumericLiteral d -> ResolvedIntrinsicLiteral d
     IntrinsicDateLiteral day -> ResolvedIntrinsicDateLiteral day
+
+-- | Allowed arities per intrinsic. daysBetween has two valid arities.
+intrinsicArities :: [(String, [Int])]
+intrinsicArities =
+  [ ("aboveThreshold", [2])
+  , ("belowThreshold", [2])
+  , ("between", [3])
+  , ("daysBetween", [2, 3])
+  , ("withinWindow", [3])
+  , ("percentage", [2])
+  , ("taxAmount", [2])
+  ]
+
+validateIntrinsicArity :: String -> [IntrinsicArgAst] -> Either [Diagnostic] ()
+validateIntrinsicArity name args =
+  case lookup name intrinsicArities of
+    Nothing ->
+      Left
+        [ Diagnostic "intrinsic"
+            ("unknown intrinsic `" ++ name ++ "`")
+        ]
+    Just allowed ->
+      let n = length args
+      in if n `elem` allowed
+           then Right ()
+           else
+             Left
+               [ Diagnostic "intrinsic"
+                   ( "intrinsic `" ++ name ++ "` expects "
+                       ++ showArityList allowed
+                       ++ " arguments but got "
+                       ++ show n
+                   )
+               ]
+  where
+    showArityList [a] = show a
+    showArityList as = show as
+
+validateIntrinsicFactRefs
+  :: SymbolTable -> [IntrinsicArgAst] -> Either [Diagnostic] [IntrinsicArg]
+validateIntrinsicFactRefs symbols args =
+  sequence (map (validateIntrinsicArg symbols) args)
+
+validateIntrinsicArg :: SymbolTable -> IntrinsicArgAst -> Either [Diagnostic] IntrinsicArg
+validateIntrinsicArg symbols arg =
+  case arg of
+    IntrinsicFactRef name ->
+      case resolveFactDecl symbols name of
+        Right _ -> pure (ResolvedIntrinsicFactRef name)
+        Left diag -> Left [diag]
+    IntrinsicNumericLiteral d -> pure (ResolvedIntrinsicLiteral d)
+    IntrinsicDateLiteral day -> pure (ResolvedIntrinsicDateLiteral day)
 
 resolveInstitutionalCondition
   :: SymbolTable

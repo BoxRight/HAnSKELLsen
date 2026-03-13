@@ -10,7 +10,7 @@ module Compiler.Scenario
 
 import Compiler.AST
 import Compiler.Compiler
-import Compiler.SymbolTable
+import Compiler.SymbolTable (buildSymbolTable, Diagnostic(..), resolveFactDecl, SymbolTable(..))
 import Control.Monad (foldM)
 import Data.List (foldl')
 import qualified Data.Map.Strict as M
@@ -117,19 +117,35 @@ compileScenarioAssertion meta symbols day assertion =
           }
     ScenarioCondition conditionAst ->
       compileScenarioCondition meta symbols day conditionAst
-    ScenarioNumericAssert factName value ->
+    ScenarioNumericAssert factName value -> do
+      factDecl <- either (Left . pure) Right (resolveFactDecl symbols factName)
+      case factDeclKind factDecl of
+        NumericFactKind -> pure ()
+        DateFactKind ->
+          Left
+            [ Diagnostic "scenario"
+                ("fact `" ++ factName ++ "` is declared as date but used in assert numeric")
+            ]
       pure $
         ScenarioDelta
           { deltaNormFacts = emptyNorm
           , deltaPatrFacts = S.singleton (P.NumericFact factName value)
           , deltaDescriptions = ["Numeric: " ++ factName ++ " = " ++ show value]
           }
-    ScenarioDateAssert factName day ->
+    ScenarioDateAssert factName dayVal -> do
+      factDecl <- either (Left . pure) Right (resolveFactDecl symbols factName)
+      case factDeclKind factDecl of
+        DateFactKind -> pure ()
+        NumericFactKind ->
+          Left
+            [ Diagnostic "scenario"
+                ("fact `" ++ factName ++ "` is declared as numeric but used in assert date")
+            ]
       pure $
         ScenarioDelta
           { deltaNormFacts = emptyNorm
-          , deltaPatrFacts = S.singleton (P.DateFact factName day)
-          , deltaDescriptions = ["Date: " ++ factName ++ " = " ++ show day]
+          , deltaPatrFacts = S.singleton (P.DateFact factName dayVal)
+          , deltaDescriptions = ["Date: " ++ factName ++ " = " ++ show dayVal]
           }
     ScenarioEvent eventAst ->
       let fact =

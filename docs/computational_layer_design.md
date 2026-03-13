@@ -78,17 +78,18 @@ This avoids arbitrary Haskell execution. Only registered intrinsics can be invok
 
 ## Initial Intrinsic Set
 
-The most useful initial intrinsics for tax and regulatory models:
+The most useful initial intrinsics for tax and regulatory models. All use **prefix-style** syntax; argument order and types are fixed.
 
-| Intrinsic | Purpose |
-|-----------|---------|
-| `aboveThreshold(value, threshold)` | value > threshold |
-| `belowThreshold(value, threshold)` | value < threshold |
-| `between(value, lower, upper)` | value in range |
-| `daysBetween(date1, date2)` | date arithmetic |
-| `withinWindow(date, start, end)` | date in validity window |
-| `percentage(amount, rate)` | percentage computation |
-| `taxAmount(base, rate)` | tax calculation |
+| Intrinsic | Signature | Arity | Purpose |
+|-----------|-----------|-------|---------|
+| `aboveThreshold` | value, threshold | 2 | value > threshold |
+| `belowThreshold` | value, threshold | 2 | value < threshold |
+| `between` | value, lower, upper | 3 | value in range [lower, upper] |
+| `withinWindow` | date, start, end | 3 | date in [start, end] |
+| `daysBetween` | date1, date2 | 2 | d2 >= d1 (date order) |
+| `daysBetween` | date1, date2, maxDays | 3 | abs(days between) <= maxDays |
+| `percentage` | amount, rate | 2 | placeholder |
+| `taxAmount` | base, rate | 2 | placeholder |
 
 All must be:
 

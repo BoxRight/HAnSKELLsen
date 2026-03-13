@@ -71,6 +71,17 @@ data VocabularyDecl
       }
   deriving (Eq, Show)
 
+data FactKindAst
+  = NumericFactKind
+  | DateFactKind
+  deriving (Eq, Show)
+
+data FactDecl = FactDecl
+  { factDeclName :: String
+  , factDeclKind :: FactKindAst
+  }
+  deriving (Eq, Show)
+
 data ActionPolarityAst
   = PositiveActionAst
   | NegativeActionAst
@@ -224,6 +235,7 @@ data TemplateBodyFormAst
   = TemplateBodyParties [PartyDecl]
   | TemplateBodyObjects [ObjectDecl]
   | TemplateBodyVocabulary [VocabularyDecl]
+  | TemplateBodyFacts [FactDecl]
   | TemplateBodyArticle ArticleAst
   | TemplateBodyScenario ScenarioAst
   | TemplateBodyInstantiate TemplateInstantiateAst
@@ -246,6 +258,7 @@ data TopFormAst
   | TopFormParties [PartyDecl]
   | TopFormObjects [ObjectDecl]
   | TopFormVocabulary [VocabularyDecl]
+  | TopFormFacts [FactDecl]
   | TopFormArticle ArticleAst
   | TopFormScenario ScenarioAst
   | TopFormTemplate TemplateDeclAst
@@ -264,6 +277,7 @@ data LawModuleAst = LawModuleAst
   , lawParties :: [PartyDecl]
   , lawObjects :: [ObjectDecl]
   , lawVocabulary :: [VocabularyDecl]
+  , lawFacts :: [FactDecl]
   , lawArticles :: [Sourced ArticleAst]
   , lawScenarios :: [Sourced ScenarioAst]
   }

@@ -112,7 +112,7 @@ prettyActWithDisplay displayMap act =
     Simple actor obj target ->
       prettyPerson actor ++ " " ++ actionPredicateWithDisplay displayMap obj ++ targetSuffix target
     Counter actor obj target ->
-      prettyPerson actor ++ " performs the counter-act for " ++ objectReference obj ++ " against " ++ prettyPerson target
+      prettyPerson actor ++ " fails to " ++ counterActPredicateWithDisplay displayMap obj ++ targetSuffix target
     Seq acts ->
       joinWith " then " (map (prettyActWithDisplay displayMap) acts)
     Par acts ->
@@ -123,6 +123,15 @@ actionPredicateWithDisplay (DisplayVerbMap m) obj =
   let base = baseVerbForObject obj
       surface = M.lookup (oName obj, base) m
   in fromMaybe (actionPredicate obj) (fmap (\v -> v ++ " " ++ objectReference obj) surface)
+
+-- | Canonical form for counter-act: "fails to verb Object". Normalizes both
+-- "does not" and "fails to" to consistent output.
+counterActPredicateWithDisplay :: DisplayVerbMap -> Object -> String
+counterActPredicateWithDisplay (DisplayVerbMap m) obj =
+  let base = baseVerbForObject obj
+      surface = M.lookup (oName obj, base) m
+  in fromMaybe (baseVerbForObject obj ++ " " ++ objectReference obj)
+        (fmap (\v -> v ++ " " ++ objectReference obj) surface)
 
 baseVerbForObject :: Object -> String
 baseVerbForObject obj =

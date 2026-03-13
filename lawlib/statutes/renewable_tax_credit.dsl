@@ -4,6 +4,10 @@ enacted 2025-06-01
 
 import "../shared/renewable_project_shared.dsl"
 
+facts
+    production: numeric
+    filingDate: date
+
 article 1 Tax Credit Framework
     fact authority legislative is present.
     claim Developer may demand grant of RenewableTaxCredit from TaxAuthority.

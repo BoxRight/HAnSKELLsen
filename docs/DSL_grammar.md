@@ -15,6 +15,10 @@ vocabulary
     verb <surface>: <canonical>
     object <surface>: <canonical>
 
+facts
+    <Name>: numeric
+    <Name>: date
+
 parties
     <Alias>: <DisplayName>[, natural person|legal person][, enjoy capacity|exercise capacity][, address <Text>]
 
@@ -69,6 +73,12 @@ template <TemplateName>(<Param>, <Param>, ...):
 
 instantiate <TemplateName>(<Param>=<Value>, <Param>=<Value>, ...)
 ```
+
+## Vocabulary and Canonical Verbs
+
+The `vocabulary` block maps surface verbs (as used in drafting) to canonical verbs (internal representation). The compiler maintains a **canonical verb registry** for extraction stability. Vocabulary entries should map surface forms to registry verbs when possible; controlled extensions (e.g. `collect`, `apply`, `maintain` for usufruct or anticresis) are allowed.
+
+The default registry includes: `transfer`, `pay`, `deliver`, `perform`, `refrain`, `refrain from`, `refrain from interfering with`, `collect`, `apply`, `maintain`, `notify`, `cancel`, `damage`. The registry is compiler-internal; object-derived verbs from `baseVerbForObject` (transfer, deliver, perform, refrain from) align with this set.
 
 ## Notes
 
@@ -192,20 +202,28 @@ If withinWindow filingDate 2025-03-01 2025-04-15
 If daysBetween filingDate deadline 30
 ```
 
-Available intrinsics:
+Available intrinsics (prefix-style; exact argument order and types):
 
-| Intrinsic | Arguments | Purpose |
-|-----------|-----------|---------|
-| `aboveThreshold` | value, threshold | value > threshold |
-| `belowThreshold` | value, threshold | value < threshold |
-| `between` | value, lower, upper | value in range |
-| `daysBetween` | date1, date2 | date order (d2 >= d1) |
-| `daysBetween` | date1, date2, maxDays | days between <= maxDays |
-| `withinWindow` | date, start, end | date in [start, end] |
-| `percentage` | amount, rate | placeholder |
-| `taxAmount` | base, rate | placeholder |
+| Intrinsic | Signature | Arity | Example |
+|-----------|-----------|-------|---------|
+| `aboveThreshold` | value, threshold | 2 (numeric, numeric) | `aboveThreshold production 10000` |
+| `belowThreshold` | value, threshold | 2 (numeric, numeric) | `belowThreshold X T` |
+| `between` | value, lower, upper | 3 (numeric, numeric, numeric) | `between v lo hi` |
+| `withinWindow` | date, start, end | 3 (date, date, date) | `withinWindow filingDate 2025-03-01 2025-04-15` |
+| `daysBetween` | date1, date2 | 2 (date, date) | `daysBetween d1 d2` — d2 >= d1 |
+| `daysBetween` | date1, date2, maxDays | 3 (date, date, numeric) | `daysBetween d1 d2 30` — abs(days) <= maxDays |
+| `percentage` | amount, rate | 2 (numeric, numeric) | `percentage AdvancePayment 50` |
+| `taxAmount` | base, rate | 2 (numeric, numeric) | `taxAmount base rate` |
 
-Numeric facts are asserted with `assert numeric <Name> <value>`. Date facts are asserted with `assert date <Name> <YYYY-MM-DD>`.
+Numeric and date facts used in rule conditions must be declared in a `facts` block. Declare each fact with its kind:
+
+```text
+facts
+    production: numeric
+    filingDate: date
+```
+
+Numeric facts are asserted with `assert numeric <Name> <value>`. Date facts are asserted with `assert date <Name> <YYYY-MM-DD>`. Rule conditions that reference fact names in intrinsics (e.g. `aboveThreshold production 10000`, `withinWindow filingDate ...`) require those names to be declared.
 
 ## Controlled Forms
 
@@ -217,6 +235,7 @@ Accepted legal-style action forms include:
 - `<Party> must refrain from <verb> <Object> to <Party>.`
 - `<Party> may refrain from <verb> <Object> to <Party>.`
 - `<Party> fails to <verb> <Object> to <Party>.`
+- `<Party> does not <verb> <Object> to <Party>.` (accepted; output prefers `fails to`)
 
 Institutional fact forms include:
 
@@ -227,6 +246,12 @@ Institutional fact forms include:
 - `collateral <Name> is present.`
 - `certification <Name> is present.`
 - `approved contractor <Name> is present.`
+
+## Fact Discipline (Convention)
+
+- **Persistent facts**: `fact asset X`, `fact liability X`, etc. represent institutional state.
+- **Contingent events**: Use `event X` or `natural event X` in rule conditions; they appear in scenarios without `assert`.
+- **Lint**: The compiler may warn if a rule condition references `event X` and there is also a fact (asset/liability/collateral/certification) named `X`, as this may indicate confusion. Many contracts legitimately declare contingent states as facts (e.g. "force majeure declared"); the warning is advisory only.
 
 ## Design Boundary
 

@@ -193,6 +193,8 @@ expandTemplateBodyForm templateEnv stack sourcedTemplate bindings templateBodyFo
       Right [withSource (TopFormObjects (map (substituteObjectDecl bindings) objects))]
     TemplateBodyVocabulary vocabulary ->
       Right [withSource (TopFormVocabulary (map (substituteVocabularyDecl bindings) vocabulary))]
+    TemplateBodyFacts facts ->
+      Right [withSource (TopFormFacts (map (substituteFactDecl bindings) facts))]
     TemplateBodyArticle article ->
       Right [withSource (TopFormArticle (substituteArticle bindings article))]
     TemplateBodyScenario scenario ->
@@ -217,6 +219,7 @@ materializeLawModule meta topForms =
         , lawParties = []
         , lawObjects = []
         , lawVocabulary = []
+        , lawFacts = []
         , lawArticles = []
         , lawScenarios = []
         }
@@ -231,6 +234,8 @@ materializeLawModule meta topForms =
           lawModule { lawObjects = lawObjects lawModule ++ objects }
         TopFormVocabulary vocabulary ->
           lawModule { lawVocabulary = lawVocabulary lawModule ++ vocabulary }
+        TopFormFacts facts ->
+          lawModule { lawFacts = lawFacts lawModule ++ facts }
         TopFormArticle article ->
           lawModule { lawArticles = lawArticles lawModule ++ [mapSourced (const article) sourcedForm] }
         TopFormScenario scenario ->
@@ -274,6 +279,10 @@ substituteVocabularyDecl bindings vocabularyDecl =
       ObjectVocabulary
         (substituteText bindings surface)
         (substituteText bindings canonical)
+
+substituteFactDecl :: TemplateBindings -> FactDecl -> FactDecl
+substituteFactDecl bindings fact =
+  fact { factDeclName = substituteText bindings (factDeclName fact) }
 
 substituteAction :: TemplateBindings -> ActionPhraseAst -> ActionPhraseAst
 substituteAction bindings action =

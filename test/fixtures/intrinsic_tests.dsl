@@ -14,6 +14,10 @@ vocabulary
     verb grant: grant
     verb produce: produce
 
+facts
+    production: numeric
+    filingDate: date
+
 article 1 Intrinsic Rules
     fact authority private is present.
     rule TaxEligibility

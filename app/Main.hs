@@ -169,7 +169,9 @@ runAuditMode args = do
             case expandTemplates composedSurfaceLaw of
               Left diagnostics ->
                 die (unlines (map show diagnostics))
-              Right lawModule ->
+              Right lawModule -> do
+                mapM_ (hPutStrLn stderr . ("lint: " ++) . show)
+                  (lintFactEventConfusion lawModule)
                 case compileLawModule lawModule of
                   Left diagnostics ->
                     die (unlines (map show diagnostics))
