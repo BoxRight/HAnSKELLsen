@@ -42,7 +42,7 @@ library
     , time
   default-language:    Haskell2010
 
-executable hanskellsen-app
+executable hanskellsen
   hs-source-dirs:      app
   main-is:             Main.hs
   build-depends:

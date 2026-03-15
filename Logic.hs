@@ -1,7 +1,7 @@
 {-# LANGUAGE GADTs #-}
 module Logic where
 
-import Capability (capabilityDominates, parseCapability)
+import Capability (capabilityDominates, capabilityRank, parseCapability)
 import FixedPoint (fixpoint)
 import LegalOntology
 import NormativeGenerators
@@ -414,7 +414,7 @@ hasVisibleAct expectedCap earliestTime expectedAct norm =
   any matches (S.toList norm)
   where
     matches (IndexedGen capIdx visibleTime visibleGen) =
-      capIdx == expectedCap
+      capabilityRank capIdx <= capabilityRank expectedCap
         && visibleTime >= earliestTime
         && case visibleGen of
              GAct visibleAct -> show visibleAct == show expectedAct
@@ -425,7 +425,7 @@ hasVisibleCounterAct expectedCap earliestTime expectedAct norm =
   any matches (S.toList norm)
   where
     matches (IndexedGen capIdx visibleTime visibleGen) =
-      capIdx == expectedCap
+      capabilityRank capIdx <= capabilityRank expectedCap
         && visibleTime >= earliestTime
         && case visibleGen of
              GAct visibleAct -> show visibleAct == show expectedAct
